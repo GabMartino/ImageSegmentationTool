@@ -6,7 +6,7 @@ import hydra
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QPixmap, QImage, QPalette
+from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
     QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy
 from PIL import Image
@@ -18,7 +18,13 @@ class CustomImageView(QWidget):
     # ImageView
     def __init__(self):
         super().__init__()
+        self.setBackgroundRole(QPalette.Base)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.setScaledContents(True)
+        self.setAlignment(Qt.AlignCenter)
+        self.setText("Open an Image folder to start labeling segments...")
 
+        
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.pressPos = event.pos()
@@ -31,6 +37,7 @@ class CustomImageView(QWidget):
                 event.pos() in self.rect()):
             self.clicked.emit()
         self.pressPos = None
+
 
 
 class Window(QMainWindow):
@@ -80,11 +87,47 @@ class Window(QMainWindow):
     def createActions(self):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
+
+    def getPixel(self, event):
+        print(event)
+        print(self.imageLabel.rect().size(), event.pos())
+
+    def activateWand(self, event):
+        if self.fileList is not None:
+            self.setEvent()
+    def setEvent(self):
+        if self.imageLabel.mousePressEvent == self.getPixel:
+            self.imageLabel.mousePressEvent = None ## only if brush selected
+            self.imageLabel.setCursor(QCursor(Qt.ArrowCursor))
+            print("wand deactivated", self.imageLabel.mousePressEvent)
+        else:
+            self.imageLabel.mousePressEvent = self.getPixel
+            self.imageLabel.setCursor(QCursor(Qt.CrossCursor))
+            print("wand activated", self.imageLabel.mousePressEvent)
+
     def setupToolbar(self):
 
         toolbarLayout = QVBoxLayout()
         self.toolbar.setLayout(toolbarLayout)
-        ######################################################à
+        ######################################################
+        ############à MAGIC WAND ##################À
+        magicWandSpace = QWidget()
+        magicWandLayout = QVBoxLayout()
+        magicWandSpace.setLayout(magicWandLayout)
+
+        self.magicWandButton= QPushButton()
+        qico = QPixmap("resources/magic-wand.png")
+        ico = QIcon(qico)
+        self.magicWandButton.setIcon(ico)
+        self.magicWandButton.setIconSize(qico.rect().size()*0.05)
+        self.magicWandButton.setCheckable(True)
+        self.magicWandButton.clicked.connect(self.activateWand)
+
+
+
+
+        magicWandLayout.addWidget(self.magicWandButton)
+
         ########### Image button selector ######################
 
 
@@ -94,7 +137,7 @@ class Window(QMainWindow):
 
         nextImageButton = QPushButton(self.toolbar)
         nextImageButton.setText("Next")
-        nextImageButton.clicked.connect(lambda : self.showImage(increment=True))
+        nextImageButton.clicked.connect(lambda: self.showImage(increment=True))
 
         previuousImageButton = QPushButton(self.toolbar)
         previuousImageButton.setText("Previous")
@@ -110,6 +153,7 @@ class Window(QMainWindow):
         buttonsLayout.addWidget(nextImageButton, Qt.AlignRight)
 
         ##########################################################ÀÀ
+        toolbarLayout.addWidget(magicWandSpace, Qt.AlignTop)
         toolbarLayout.addWidget(buttonsSpace, Qt.AlignBottom)
 
 
@@ -118,14 +162,15 @@ class Window(QMainWindow):
         imageViewerLayout = QGridLayout()
         self.imageViewer.setLayout(imageViewerLayout)
 
-
-        self.imageLabel = QLabel()
+        self.imageLabel = CustomImageView()
         self.imageLabel.setBackgroundRole(QPalette.Base)
         self.imageLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.imageLabel.setScaledContents(True)
         self.imageLabel.setAlignment(Qt.AlignCenter)
         self.imageLabel.setText("Open an Image folder to start labeling segments...")
-        self.imageLabel.mousePressEvent = self.openFile
+        self.imageLabel.mousePressEvent = self.openFile ## at first upload images
+        #self.imageLabel.installEventFilter(EventFilter())
+
         imageViewerLayout.addWidget(self.imageLabel)
 
     def _createActions(self):
@@ -155,7 +200,7 @@ class Window(QMainWindow):
 
     def openFile(self, event):
         # Logic for opening an existing file goes here...
-
+        print(event)
         options = QFileDialog.Options()
         dialog = QFileDialog()
         #dialog.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
@@ -170,10 +215,11 @@ class Window(QMainWindow):
                 return
             self.indexImage = 0
             self.showImage(firstCall=True)
+
+            self.imageLabel.mousePressEvent = None  ## Removed if already called
         else:
             QMessageBox.information(self, "Image Viewer", "Empty Directory")
 
-        self.imageLabel.mousePressEvent = None ## Removed if already called
 
 
     def showImage(self, increment=True, firstCall=False):
@@ -190,25 +236,8 @@ class Window(QMainWindow):
             return
 
         self.imageLabel.setPixmap(QPixmap.fromImage(image))
+        self.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
 
-        self.imageCounter.setText(str(self.indexImage) + "/" + str(len(self.fileList)))
-
-
-    '''
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.pressPos = event.pos()
-
-    def mouseReleaseEvent(self, event):
-        # ensure that the left button was pressed *and* released within the
-        # geometry of the widget; if so, emit the signal;
-        if (self.pressPos is not None and
-                event.button() == Qt.LeftButton and
-                event.pos() in self.rect()):
-            self.clicked.emit()
-        self.pressPos = None
-    
-    '''
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
