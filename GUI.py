@@ -1,4 +1,5 @@
 import os
+import pathlib
 import sys
 
 import hydra
@@ -39,6 +40,10 @@ class Window(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("Image Segmentation tool")
         self.setGeometry(100, 100, width, height)
+
+        self.indexImage = None
+        self.fileList = None
+
 
         self.UIComponents()
         self.createActions()
@@ -89,18 +94,20 @@ class Window(QMainWindow):
 
         nextImageButton = QPushButton(self.toolbar)
         nextImageButton.setText("Next")
+        nextImageButton.clicked.connect(lambda : self.showImage(increment=True))
 
         previuousImageButton = QPushButton(self.toolbar)
         previuousImageButton.setText("Previous")
+        previuousImageButton.clicked.connect(lambda: self.showImage(increment=False))
 
-        imageCounter = QLabel()
-        imageCounter.setText("1/N")
-        imageCounter.setAlignment(Qt.AlignCenter)
+        self.imageCounter = QLabel()
+        #imageCounter.setText(str(self.indexImage)+"/"+str(len(self.fileList)))
+        self.imageCounter.setAlignment(Qt.AlignCenter)
 
 
-        buttonsLayout.addWidget(nextImageButton, Qt.AlignRight)
-        buttonsLayout.addWidget(imageCounter, Qt.AlignCenter)
         buttonsLayout.addWidget(previuousImageButton, Qt.AlignLeft)
+        buttonsLayout.addWidget(self.imageCounter, Qt.AlignCenter)
+        buttonsLayout.addWidget(nextImageButton, Qt.AlignRight)
 
         ##########################################################ÀÀ
         toolbarLayout.addWidget(buttonsSpace, Qt.AlignBottom)
@@ -118,7 +125,7 @@ class Window(QMainWindow):
         self.imageLabel.setScaledContents(True)
         self.imageLabel.setAlignment(Qt.AlignCenter)
         self.imageLabel.setText("Open an Image folder to start labeling segments...")
-
+        self.imageLabel.mousePressEvent = self.openFile
         imageViewerLayout.addWidget(self.imageLabel)
 
     def _createActions(self):
@@ -146,40 +153,48 @@ class Window(QMainWindow):
         self.saveAction.triggered.connect(self.saveFile) ## Connect the action to a method
 
 
-    def openFile(self):
+    def openFile(self, event):
         # Logic for opening an existing file goes here...
 
         options = QFileDialog.Options()
         dialog = QFileDialog()
         #dialog.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
-        foo_dir = dialog.getExistingDirectory(self, 'Select Image Directory', "./", options=options)
+        actualDir = os.getcwd()
+        foo_dir = dialog.getExistingDirectory(self, 'Select Images Directory', directory=actualDir, options=options)
+        if foo_dir:
+            self.actualDirectory = foo_dir
+            self.fileList = os.listdir(self.actualDirectory)
+            self.fileList = [filename for filename in self.fileList if pathlib.Path(filename).suffix in [".jpeg", ".jpg", ".png", ".gif", ".JPG", ".JPEG"]]
+            if len(self.fileList) <= 0:
+                QMessageBox.information(self, "Image Viewer", "The selected directory has no valid images.")
+                return
+            self.indexImage = 0
+            self.showImage(firstCall=True)
+        else:
+            QMessageBox.information(self, "Image Viewer", "Empty Directory")
 
-        self.actualDirectory = foo_dir
-        self.fileList = os.listdir(self.actualDirectory)
-        self.indexImage = 0
-        self.showImage(firstCall=True)
-
+        self.imageLabel.mousePressEvent = None ## Removed if already called
 
 
     def showImage(self, increment=True, firstCall=False):
-        if not firstCall:
+        if not firstCall :
             if increment:
-                self.indexImage = (self.indexImage + 1)//len(self.fileList)
+                self.indexImage = (self.indexImage + 1) % len(self.fileList)
             else:
-                self.indexImage = (self.indexImage - 1) // len(self.fileList)
+                self.indexImage = (self.indexImage - 1) % len(self.fileList)
 
         filename = self.actualDirectory + "/" + self.fileList[self.indexImage]
         image = QImage(filename)
-        print(image, filename)
         if image.isNull():
             QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
             return
 
         self.imageLabel.setPixmap(QPixmap.fromImage(image))
 
+        self.imageCounter.setText(str(self.indexImage) + "/" + str(len(self.fileList)))
 
 
-
+    '''
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.pressPos = event.pos()
@@ -192,7 +207,8 @@ class Window(QMainWindow):
                 event.pos() in self.rect()):
             self.clicked.emit()
         self.pressPos = None
-
+    
+    '''
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
