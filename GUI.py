@@ -2,17 +2,20 @@ import os
 import pathlib
 import sys
 
+import cv2
 import hydra
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor
+from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
     QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy
 from PIL import Image
+from matplotlib import pyplot as plt
+
 
 # Image View class
-class CustomImageView(QWidget):
+class CustomImageView(QLabel):
 
     # constructor which inherit original
     # ImageView
@@ -24,7 +27,12 @@ class CustomImageView(QWidget):
         self.setAlignment(Qt.AlignCenter)
         self.setText("Open an Image folder to start labeling segments...")
 
-        
+        self.mousePressCallback = None
+
+    def setMouseReleaseFunctionCallback(self, method):
+        self.mousePressCallback = method
+
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.pressPos = event.pos()
@@ -35,7 +43,9 @@ class CustomImageView(QWidget):
         if (self.pressPos is not None and
                 event.button() == Qt.LeftButton and
                 event.pos() in self.rect()):
-            self.clicked.emit()
+            if self.mousePressCallback is not None:
+                info = (self.rect().size(), event.pos())
+                self.mousePressCallback(info)
         self.pressPos = None
 
 
@@ -88,22 +98,25 @@ class Window(QMainWindow):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
 
-    def getPixel(self, event):
-        print(event)
-        print(self.imageLabel.rect().size(), event.pos())
+    def createMask(self, info):
+        overlay_size, click_pos  = info
+        image = self.imageLabel.pixmap().toImage()
+        import qimage2ndarray
+        image_np = qimage2ndarray.rgb_view(image).copy()
+        #cv2.floodFill(image_np, None, seedPoint=click_pos, newVal=(255, 0, 0), loDiff=(5, 5, 5, 5), upDiff=(5, 5, 5, 5))
+        #self.maskOverlay
 
     def activateWand(self, event):
         if self.fileList is not None:
-            self.setEvent()
-    def setEvent(self):
-        if self.imageLabel.mousePressEvent == self.getPixel:
-            self.imageLabel.mousePressEvent = None ## only if brush selected
-            self.imageLabel.setCursor(QCursor(Qt.ArrowCursor))
-            print("wand deactivated", self.imageLabel.mousePressEvent)
-        else:
-            self.imageLabel.mousePressEvent = self.getPixel
-            self.imageLabel.setCursor(QCursor(Qt.CrossCursor))
-            print("wand activated", self.imageLabel.mousePressEvent)
+            if self.imageLabel.mousePressCallback == self.createMask:
+                self.imageLabel.setMouseReleaseFunctionCallback(None)
+                self.imageLabel.setCursor(QCursor(Qt.ArrowCursor))
+                print("wand deactivated", self.imageLabel.mousePressEvent)
+            else:
+                self.imageLabel.setMouseReleaseFunctionCallback(self.createMask)
+                self.imageLabel.setCursor(QCursor(Qt.CrossCursor))
+                print("wand activated", self.imageLabel.mousePressEvent)
+
 
     def setupToolbar(self):
 
@@ -123,13 +136,9 @@ class Window(QMainWindow):
         self.magicWandButton.setCheckable(True)
         self.magicWandButton.clicked.connect(self.activateWand)
 
-
-
-
         magicWandLayout.addWidget(self.magicWandButton)
 
         ########### Image button selector ######################
-
 
         buttonsSpace = QWidget()
         buttonsLayout = QHBoxLayout()
@@ -163,13 +172,14 @@ class Window(QMainWindow):
         self.imageViewer.setLayout(imageViewerLayout)
 
         self.imageLabel = CustomImageView()
-        self.imageLabel.setBackgroundRole(QPalette.Base)
-        self.imageLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.imageLabel.setScaledContents(True)
-        self.imageLabel.setAlignment(Qt.AlignCenter)
-        self.imageLabel.setText("Open an Image folder to start labeling segments...")
-        self.imageLabel.mousePressEvent = self.openFile ## at first upload images
-        #self.imageLabel.installEventFilter(EventFilter())
+        #self.imageLabel.setBackgroundRole(QPalette.Base)
+        #self.imageLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        #self.imageLabel.setScaledContents(True)
+        #self.imageLabel.setAlignment(Qt.AlignCenter)
+        #self.imageLabel.setText("Open an Image folder to start labeling segments...")
+        #self.imageLabel.mousePressEvent = self.openFile ## at first upload images
+        self.imageLabel.setMouseReleaseFunctionCallback(self.openFile)
+        #painter = QPainter(self)
 
         imageViewerLayout.addWidget(self.imageLabel)
 
@@ -198,9 +208,8 @@ class Window(QMainWindow):
         self.saveAction.triggered.connect(self.saveFile) ## Connect the action to a method
 
 
-    def openFile(self, event):
+    def openFile(self, info):
         # Logic for opening an existing file goes here...
-        print(event)
         options = QFileDialog.Options()
         dialog = QFileDialog()
         #dialog.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
@@ -216,7 +225,7 @@ class Window(QMainWindow):
             self.indexImage = 0
             self.showImage(firstCall=True)
 
-            self.imageLabel.mousePressEvent = None  ## Removed if already called
+            self.imageLabel.setMouseReleaseFunctionCallback(None)  ## Removed if already called
         else:
             QMessageBox.information(self, "Image Viewer", "Empty Directory")
 
