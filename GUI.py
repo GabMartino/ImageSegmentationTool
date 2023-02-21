@@ -13,6 +13,8 @@ from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, 
 from PIL import Image
 from matplotlib import pyplot as plt
 
+from SegmentationLabeling.src.components.Toolbar import Toolbar
+
 
 # Image View class
 class CustomImageView(QLabel):
@@ -77,7 +79,7 @@ class Window(QMainWindow):
 
         ## Create Image Viewer and a toolbar
         self.imageViewer = QWidget()
-        self.toolbar = QWidget()
+        self.toolbar = Toolbar()
 
         layout.addWidget(self.imageViewer, int(self.width()*0.75))
         layout.addWidget(self.toolbar, int(self.width()*0.25))
@@ -102,7 +104,7 @@ class Window(QMainWindow):
 
 
     def createMask(self, info):
-        overlay_size, click_pos  = info
+        overlay_size, click_pos = info
 
         x = click_pos.x()
         y = click_pos.y()
@@ -119,15 +121,16 @@ class Window(QMainWindow):
         image_np = qimage2ndarray.rgb_view(image).copy()
         print(image_np.shape)
         self.colorPoints = []
-        for x_i in range(x - self.magicWandRoundSize, x + self.magicWandRoundSize, 2):
-            for y_i in range(y - self.magicWandRoundSize, y + self.magicWandRoundSize, 2):
-                if (x_i - x)**2 + (y_i - y)**2 <= self.magicWandRoundSize**2:
+        radius = self.toolbar.magicWand.magicWandRadius
+        for x_i in range(x - radius, x + radius, 2):
+            for y_i in range(y - radius, y + radius, 2):
+                if (x_i - x)**2 + (y_i - y)**2 <= radius**2:
                     image_x_pos = np.clip(int(y_i*y_scale_factor), 0, image.size().height())
                     image_y_pos = np.clip(int(x_i*x_scale_factor), 0, image.size().width())
                     self.colorPoints.append(image_np[image_x_pos, image_y_pos])
 
         averageColor = np.mean(np.array(self.colorPoints), axis=0).astype(int)
-        self.setColorColorPreview(tuple(averageColor))
+        self.toolbar.magicWand.setViewedColor(tuple(averageColor))
         image_x_pos = np.clip(int(y*y_scale_factor), 0, image.size().height())
         image_y_pos = np.clip(int(x*x_scale_factor), 0, image.size().width())
         _, _, mask, _ = cv2.floodFill(image_np, None, seedPoint=(image_x_pos, image_y_pos), newVal=(255, 0, 0), loDiff=(5, 5, 5, 5), upDiff=(5, 5, 5, 5))
@@ -144,7 +147,7 @@ class Window(QMainWindow):
         # 1. Set the cursor map
         cursor_pix = QPixmap("./resources/circle-icon.png")
         # 2. Scale textures
-        cursor_scaled_pix = cursor_pix.scaled(QSize(self.magicWandRoundSize, self.magicWandRoundSize), Qt.KeepAspectRatio)
+        cursor_scaled_pix = cursor_pix.scaled(QSize(self.toolbar.magicWand.magicWandRadius, self.toolbar.magicWand.magicWandRadius), Qt.KeepAspectRatio)
 
         # 3. Set cursor style and cursor focus position
         current_cursor = QCursor(cursor_scaled_pix, -1, -1)
@@ -155,116 +158,28 @@ class Window(QMainWindow):
             if self.imageOverlay.mousePressCallback == self.createMask:
                 self.imageOverlay.setMouseReleaseFunctionCallback(None)
                 self.imageOverlay.setCursor(QCursor(Qt.ArrowCursor))
-                self.magicWandButton.setChecked(False)
+                self.toolbar.magicWand.button.setChecked(False)
             else:
                 self.imageOverlay.setMouseReleaseFunctionCallback(self.createMask)
                 self.setWandCursor()
-                self.magicWandButton.setChecked(True)
+                self.toolbar.magicWand.button.setChecked(True)
         else:
-            self.magicWandButton.setChecked(False)
+            self.toolbar.magicWand.button.setChecked(False)
 
-    def setColorColorPreview(self, color):
-        r, g, b = color
-        palette = QPalette()
-        palette.setColor(self.colorPreview.backgroundRole(), QColor(r, g, b))
-        self.colorPreview.setAutoFillBackground(True)
-        self.colorPreview.setPalette(palette)
-
-        def rgb_to_hex(r, g, b):
-            return '#{:02x}{:02x}{:02x}'.format(r, g, b)
-        colorText = "("+ str(r) + ", " + str(g) + ", " + str(b) +")\n"
-        colorText += rgb_to_hex(r, g, b)
-        self.colorLabel.setText(colorText)
 
     def updateMagicWandSize(self, value):
-        self.magicWandRoundSize = value
+        self.toolbar.magicWand.magicWandRadius = value
         self.setWandCursor() if self.fileList is not None else None
+
+
     def setupToolbar(self):
 
-        toolbarLayout = QVBoxLayout()
-        self.toolbar.setLayout(toolbarLayout)
-        ######################################################
-        ############à MAGIC WAND ##################À
-        magicWandSpace = QWidget()
-        magicWandLayout = QHBoxLayout()
-        magicWandSpace.setLayout(magicWandLayout)
 
-        self.magicWandButton= QPushButton()
-        qico = QPixmap("resources/magic-wand.png")
-        ico = QIcon(qico)
-        self.magicWandButton.setIcon(ico)
-        print(qico.rect().size()*0.05)
-        self.magicWandButton.setFixedSize(qico.rect().size()*0.10)
-        self.magicWandButton.setIconSize(qico.rect().size()*0.05)
-        self.magicWandButton.setCheckable(True)
-        self.magicWandButton.clicked.connect(self.activateWand)
-        self.magicWandRoundSize = 10
+        self.toolbar.magicWand.button.setClickCallback(self.activateWand)
+        self.toolbar.magicWand.slider.setValueChangedCallback(self.updateMagicWandSize)
 
-
-
-        self.colorPreview = QLabel()
-        self.colorPreview.setFixedSize(qico.rect().size()*0.10)
-        self.colorPreview.setStyleSheet("border: 2px solid black")
-
-        self.colorLabel = QLabel()
-        self.colorLabel.setFixedSize(100, 30)
-
-
-
-        magicWandLayout.addWidget(self.magicWandButton)
-        magicWandLayout.addWidget(self.colorPreview)
-        magicWandLayout.addWidget(self.colorLabel)
-        #####################################################################àà
-        ###############à magic wand size slider
-        magicWandSettings = QWidget()
-        magicWandSettingsLayout = QVBoxLayout()
-        magicWandSettings.setLayout(magicWandSettingsLayout)
-        self.magicWandSizeSlider = QSlider(Qt.Horizontal)
-        self.magicWandSizeSlider.setMinimum(10)
-        self.magicWandSizeSlider.setMaximum(150)
-        self.magicWandSizeSlider.setTickPosition(self.magicWandRoundSize)
-        self.magicWandSizeSlider.setFixedSize(200, 20)
-        self.magicWandSizeSlider.valueChanged.connect(self.updateMagicWandSize)
-        labels = QWidget()
-        slider_hbox = QHBoxLayout()
-        labels.setLayout(slider_hbox)
-        slider_hbox.setContentsMargins(0, 0, 0, 0)
-        label_minimum = QLabel(alignment=Qt.AlignLeft)
-        label_minimum.setText(str(self.magicWandSizeSlider.minimum()))
-        label_maximum = QLabel(alignment=Qt.AlignRight)
-        label_maximum.setText(str(self.magicWandSizeSlider.maximum()))
-
-        slider_hbox.addWidget(label_minimum, Qt.AlignLeft)
-        slider_hbox.addWidget(label_maximum, Qt.AlignRight)
-        magicWandSettingsLayout.addWidget(self.magicWandSizeSlider, Qt.AlignTop)
-        magicWandSettingsLayout.addWidget(labels, Qt.AlignTop)
-        ########### Image button selector ######################
-
-        buttonsSpace = QWidget()
-        buttonsLayout = QHBoxLayout()
-        buttonsSpace.setLayout(buttonsLayout)
-
-        nextImageButton = QPushButton(self.toolbar)
-        nextImageButton.setText("Next")
-        nextImageButton.clicked.connect(lambda: self.showImage(increment=True))
-
-        previuousImageButton = QPushButton(self.toolbar)
-        previuousImageButton.setText("Previous")
-        previuousImageButton.clicked.connect(lambda: self.showImage(increment=False))
-
-        self.imageCounter = QLabel()
-        #imageCounter.setText(str(self.indexImage)+"/"+str(len(self.fileList)))
-        self.imageCounter.setAlignment(Qt.AlignCenter)
-
-
-        buttonsLayout.addWidget(previuousImageButton, Qt.AlignLeft)
-        buttonsLayout.addWidget(self.imageCounter, Qt.AlignCenter)
-        buttonsLayout.addWidget(nextImageButton, Qt.AlignRight)
-
-        ##########################################################ÀÀ
-        toolbarLayout.addWidget(magicWandSpace, Qt.AlignTop)
-        toolbarLayout.addWidget(magicWandSettings, Qt.AlignTop)
-        toolbarLayout.addWidget(buttonsSpace, Qt.AlignBottom)
+        self.toolbar.imageSelector.nextImageButton.clicked.connect(lambda: self.showImage(increment=True))
+        self.toolbar.imageSelector.previuousImageButton.clicked.connect(lambda: self.showImage(increment=False))
 
 
     def setupImageViewer(self):
@@ -338,7 +253,7 @@ class Window(QMainWindow):
             return
 
         self.imageOverlay.setPixmap(QPixmap.fromImage(image))
-        self.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
+        self.toolbar.imageSelector.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
