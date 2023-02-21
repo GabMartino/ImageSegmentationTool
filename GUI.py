@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QUrl, QPoint, QSize, QRect
 from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
-    QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy
+    QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy, QSlider
 from PIL import Image
 from matplotlib import pyplot as plt
 
@@ -107,20 +107,23 @@ class Window(QMainWindow):
         x = click_pos.x()
         y = click_pos.y()
 
-        image = self.imageLabel.pixmap().toImage()
+        image = self.imageOverlay.pixmap().toImage()
         print(overlay_size, click_pos, image.size())
 
-        x_scale_factor = int(image.size().width()/overlay_size.width())
-        y_scale_factor = int(image.size().height()/overlay_size.height())
-        x *= x_scale_factor
-        y *= y_scale_factor
+        x_scale_factor = image.size().width()/overlay_size.width()
+        y_scale_factor = image.size().height()/overlay_size.height()
+        print(x_scale_factor, y_scale_factor)
+        #x *= x_scale_factor
+        #y *= y_scale_factor
         import qimage2ndarray
         image_np = qimage2ndarray.rgb_view(image).copy()
+        print(image_np.shape)
         self.colorPoints = []
         for x_i in range(x - self.magicWandRoundSize, x + self.magicWandRoundSize, 2):
             for y_i in range(y - self.magicWandRoundSize, y + self.magicWandRoundSize, 2):
                 if (x_i - x)**2 + (y_i - y)**2 <= self.magicWandRoundSize**2:
-                    self.colorPoints.append(image_np[x_i, y_i])
+
+                    self.colorPoints.append(image_np[int(y_i*y_scale_factor),int(x_i*x_scale_factor)])
 
         averageColor = np.mean(np.array(self.colorPoints), axis=0).astype(int)
         self.setColorColorPreview(tuple(averageColor))
@@ -134,17 +137,16 @@ class Window(QMainWindow):
 
         # 3. Set cursor style and cursor focus position
         current_cursor = QCursor(cursor_scaled_pix, -1, -1)
-        self.imageLabel.setCursor(current_cursor)
+        self.imageOverlay.setCursor(current_cursor)
 
     def activateWand(self, event):
         if self.fileList is not None:
-            if self.imageLabel.mousePressCallback == self.createMask:
-                self.imageLabel.setMouseReleaseFunctionCallback(None)
-                self.imageLabel.setCursor(QCursor(Qt.ArrowCursor))
+            if self.imageOverlay.mousePressCallback == self.createMask:
+                self.imageOverlay.setMouseReleaseFunctionCallback(None)
+                self.imageOverlay.setCursor(QCursor(Qt.ArrowCursor))
                 self.magicWandButton.setChecked(False)
             else:
-                self.imageLabel.setMouseReleaseFunctionCallback(self.createMask)
-                #self.imageLabel.setCursor(QCursor(Qt.CrossCursor))
+                self.imageOverlay.setMouseReleaseFunctionCallback(self.createMask)
                 self.setWandCursor()
                 self.magicWandButton.setChecked(True)
         else:
@@ -157,7 +159,15 @@ class Window(QMainWindow):
         self.colorPreview.setAutoFillBackground(True)
         self.colorPreview.setPalette(palette)
 
+        def rgb_to_hex(r, g, b):
+            return '#{:02x}{:02x}{:02x}'.format(r, g, b)
+        colorText = "("+ str(r) + ", " + str(g) + ", " + str(b) +")\n"
+        colorText += rgb_to_hex(r, g, b)
+        self.colorLabel.setText(colorText)
 
+    def updateMagicWandSize(self, value):
+        self.magicWandRoundSize = value
+        self.setWandCursor() if self.fileList is not None else None
     def setupToolbar(self):
 
         toolbarLayout = QVBoxLayout()
@@ -178,13 +188,34 @@ class Window(QMainWindow):
         self.magicWandButton.setCheckable(True)
         self.magicWandButton.clicked.connect(self.activateWand)
         self.magicWandRoundSize = 10
+
+
+
         self.colorPreview = QLabel()
         self.colorPreview.setFixedSize(qico.rect().size()*0.10)
-        radius = int((qico.rect().size()*0.10).width()/2)
-        self.colorPreview.setStyleSheet("border: 2px solid black; border-radius:"+str(radius) +"px;")
-        magicWandLayout.addWidget(self.magicWandButton)
+        self.colorPreview.setStyleSheet("border: 2px solid black")
 
+        self.colorLabel = QLabel()
+        self.colorLabel.setFixedSize(100, 30)
+
+
+
+        magicWandLayout.addWidget(self.magicWandButton)
         magicWandLayout.addWidget(self.colorPreview)
+        magicWandLayout.addWidget(self.colorLabel)
+        #####################################################################àà
+        ###############à magic wand size slider
+        magicWandSettings = QWidget()
+        magicWandSettingsLayout = QVBoxLayout()
+        magicWandSettings.setLayout(magicWandSettingsLayout)
+        self.magicWandSizeSlider = QSlider(Qt.Horizontal)
+        self.magicWandSizeSlider.setMinimum(10)
+        self.magicWandSizeSlider.setMaximum(150)
+        self.magicWandSizeSlider.setTickPosition(self.magicWandRoundSize)
+        self.magicWandSizeSlider.setFixedSize(200, 20)
+        self.magicWandSizeSlider.valueChanged.connect(self.updateMagicWandSize)
+
+        magicWandSettingsLayout.addWidget(self.magicWandSizeSlider, Qt.AlignTop)
         ########### Image button selector ######################
 
         buttonsSpace = QWidget()
@@ -210,6 +241,7 @@ class Window(QMainWindow):
 
         ##########################################################ÀÀ
         toolbarLayout.addWidget(magicWandSpace, Qt.AlignTop)
+        toolbarLayout.addWidget(magicWandSettings, Qt.AlignTop)
         toolbarLayout.addWidget(buttonsSpace, Qt.AlignBottom)
 
 
@@ -218,17 +250,10 @@ class Window(QMainWindow):
         imageViewerLayout = QGridLayout()
         self.imageViewer.setLayout(imageViewerLayout)
 
-        self.imageLabel = CustomImageView()
-        #self.imageLabel.setBackgroundRole(QPalette.Base)
-        #self.imageLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        #self.imageLabel.setScaledContents(True)
-        #self.imageLabel.setAlignment(Qt.AlignCenter)
-        #self.imageLabel.setText("Open an Image folder to start labeling segments...")
-        #self.imageLabel.mousePressEvent = self.openFile ## at first upload images
-        self.imageLabel.setMouseReleaseFunctionCallback(self.openFile)
-        #painter = QPainter(self)
+        self.imageOverlay = CustomImageView()
+        self.imageOverlay.setMouseReleaseFunctionCallback(self.openFile)
 
-        imageViewerLayout.addWidget(self.imageLabel)
+        imageViewerLayout.addWidget(self.imageOverlay)
 
     def _createActions(self):
 
@@ -258,7 +283,7 @@ class Window(QMainWindow):
     def openFile(self, info):
         # Logic for opening an existing file goes here...
         dialog = QFileDialog()
-        actualDir = os.getcwd()
+        actualDir = "/home/gabriele/Desktop/Barilla/Datasets/wheat-leaf-kaggle/archive/wheat_leaf/" #os.getcwd()
 
         foo_dir = dialog.getExistingDirectory(self, 'Select Images Directory', directory=actualDir, options=QFileDialog.DontUseNativeDialog)
         if foo_dir:
@@ -271,7 +296,7 @@ class Window(QMainWindow):
             self.indexImage = 0
             self.showImage(firstCall=True)
 
-            self.imageLabel.setMouseReleaseFunctionCallback(None)  ## Removed if already called
+            self.imageOverlay.setMouseReleaseFunctionCallback(None)  ## Removed if already called
         else:
             QMessageBox.information(self, "Image Viewer", "Empty Directory")
 
@@ -290,7 +315,7 @@ class Window(QMainWindow):
             QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
             return
 
-        self.imageLabel.setPixmap(QPixmap.fromImage(image))
+        self.imageOverlay.setPixmap(QPixmap.fromImage(image))
         self.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
 
 
