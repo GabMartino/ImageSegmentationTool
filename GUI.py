@@ -6,7 +6,7 @@ import cv2
 import hydra
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QUrl, QPoint, QSize
+from PyQt5.QtCore import Qt, QUrl, QPoint, QSize, QRect
 from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
     QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy
@@ -47,6 +47,7 @@ class CustomImageView(QLabel):
                 info = (self.rect().size(), event.pos())
                 self.mousePressCallback(info)
         self.pressPos = None
+
 
 
 
@@ -256,11 +257,10 @@ class Window(QMainWindow):
 
     def openFile(self, info):
         # Logic for opening an existing file goes here...
-        options = QFileDialog.Options()
         dialog = QFileDialog()
-        #dialog.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         actualDir = os.getcwd()
-        foo_dir = dialog.getExistingDirectory(self, 'Select Images Directory', directory=actualDir, options=options)
+
+        foo_dir = dialog.getExistingDirectory(self, 'Select Images Directory', directory=actualDir, options=QFileDialog.DontUseNativeDialog)
         if foo_dir:
             self.actualDirectory = foo_dir
             self.fileList = os.listdir(self.actualDirectory)
@@ -299,7 +299,16 @@ def main(cfg):
 
     app = QApplication(sys.argv)
     win = Window(cfg.window.width, cfg.window.height)
+    screenGeometry = app.desktop().screenGeometry()
+    x = int((screenGeometry.width() - win.width())/ 2)
+    y = int((screenGeometry.height() -win.height()) / 2)
+    win.move(x, y)
+
+
     win.show()
     sys.exit(app.exec_())
+
+
+
 if __name__ == "__main__":
     main()
