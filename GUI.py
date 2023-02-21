@@ -6,8 +6,8 @@ import cv2
 import hydra
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter
+from PyQt5.QtCore import Qt, QUrl, QPoint, QSize
+from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
     QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy
 from PIL import Image
@@ -98,24 +98,63 @@ class Window(QMainWindow):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
 
+    def getColorPreview(self):
+        pass
     def createMask(self, info):
         overlay_size, click_pos  = info
+
+        x = click_pos.x()
+        y = click_pos.y()
+
         image = self.imageLabel.pixmap().toImage()
+        print(overlay_size, click_pos, image.size())
+
+        x_scale_factor = int(image.size().width()/overlay_size.width())
+        y_scale_factor = int(image.size().height()/overlay_size.height())
+        x *= x_scale_factor
+        y *= y_scale_factor
         import qimage2ndarray
         image_np = qimage2ndarray.rgb_view(image).copy()
+        self.colorPoints = []
+        for x_i in range(x - self.magicWandRoundSize, x + self.magicWandRoundSize, 2):
+            for y_i in range(y - self.magicWandRoundSize, y + self.magicWandRoundSize, 2):
+                if (x_i - x)**2 + (y_i - y)**2 <= self.magicWandRoundSize**2:
+                    self.colorPoints.append(image_np[x_i, y_i])
+
+        averageColor = np.mean(np.array(self.colorPoints), axis=0).astype(int)
+        self.setColorColorPreview(tuple(averageColor))
         #cv2.floodFill(image_np, None, seedPoint=click_pos, newVal=(255, 0, 0), loDiff=(5, 5, 5, 5), upDiff=(5, 5, 5, 5))
         #self.maskOverlay
+    def setWandCursor(self):
+        # 1. Set the cursor map
+        cursor_pix = QPixmap("./resources/circle-icon.png")
+        # 2. Scale textures
+        cursor_scaled_pix = cursor_pix.scaled(QSize(self.magicWandRoundSize, self.magicWandRoundSize), Qt.KeepAspectRatio)
+
+        # 3. Set cursor style and cursor focus position
+        current_cursor = QCursor(cursor_scaled_pix, -1, -1)
+        self.imageLabel.setCursor(current_cursor)
 
     def activateWand(self, event):
         if self.fileList is not None:
             if self.imageLabel.mousePressCallback == self.createMask:
                 self.imageLabel.setMouseReleaseFunctionCallback(None)
                 self.imageLabel.setCursor(QCursor(Qt.ArrowCursor))
-                print("wand deactivated", self.imageLabel.mousePressEvent)
+                self.magicWandButton.setChecked(False)
             else:
                 self.imageLabel.setMouseReleaseFunctionCallback(self.createMask)
-                self.imageLabel.setCursor(QCursor(Qt.CrossCursor))
-                print("wand activated", self.imageLabel.mousePressEvent)
+                #self.imageLabel.setCursor(QCursor(Qt.CrossCursor))
+                self.setWandCursor()
+                self.magicWandButton.setChecked(True)
+        else:
+            self.magicWandButton.setChecked(False)
+
+    def setColorColorPreview(self, color):
+        r, g, b = color
+        palette = QPalette()
+        palette.setColor(self.colorPreview.backgroundRole(), QColor(r, g, b))
+        self.colorPreview.setAutoFillBackground(True)
+        self.colorPreview.setPalette(palette)
 
 
     def setupToolbar(self):
@@ -125,19 +164,26 @@ class Window(QMainWindow):
         ######################################################
         ############à MAGIC WAND ##################À
         magicWandSpace = QWidget()
-        magicWandLayout = QVBoxLayout()
+        magicWandLayout = QHBoxLayout()
         magicWandSpace.setLayout(magicWandLayout)
 
         self.magicWandButton= QPushButton()
         qico = QPixmap("resources/magic-wand.png")
         ico = QIcon(qico)
         self.magicWandButton.setIcon(ico)
+        print(qico.rect().size()*0.05)
+        self.magicWandButton.setFixedSize(qico.rect().size()*0.10)
         self.magicWandButton.setIconSize(qico.rect().size()*0.05)
         self.magicWandButton.setCheckable(True)
         self.magicWandButton.clicked.connect(self.activateWand)
-
+        self.magicWandRoundSize = 10
+        self.colorPreview = QLabel()
+        self.colorPreview.setFixedSize(qico.rect().size()*0.10)
+        radius = int((qico.rect().size()*0.10).width()/2)
+        self.colorPreview.setStyleSheet("border: 2px solid black; border-radius:"+str(radius) +"px;")
         magicWandLayout.addWidget(self.magicWandButton)
 
+        magicWandLayout.addWidget(self.colorPreview)
         ########### Image button selector ######################
 
         buttonsSpace = QWidget()
