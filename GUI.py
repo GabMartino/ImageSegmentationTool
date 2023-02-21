@@ -88,6 +88,8 @@ class Window(QMainWindow):
         self.setupToolbar()
         self.setupImageViewer()
 
+        self.masks = {}
+
 
 
     def setupMenus(self):
@@ -99,8 +101,6 @@ class Window(QMainWindow):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
 
-    def getColorPreview(self):
-        pass
     def createMask(self, info):
         overlay_size, click_pos  = info
 
@@ -122,12 +122,23 @@ class Window(QMainWindow):
         for x_i in range(x - self.magicWandRoundSize, x + self.magicWandRoundSize, 2):
             for y_i in range(y - self.magicWandRoundSize, y + self.magicWandRoundSize, 2):
                 if (x_i - x)**2 + (y_i - y)**2 <= self.magicWandRoundSize**2:
-
-                    self.colorPoints.append(image_np[int(y_i*y_scale_factor),int(x_i*x_scale_factor)])
+                    image_x_pos = np.clip(int(y_i*y_scale_factor), 0, image.size().height())
+                    image_y_pos = np.clip(int(x_i*x_scale_factor), 0, image.size().width())
+                    self.colorPoints.append(image_np[image_x_pos, image_y_pos])
 
         averageColor = np.mean(np.array(self.colorPoints), axis=0).astype(int)
         self.setColorColorPreview(tuple(averageColor))
-        #cv2.floodFill(image_np, None, seedPoint=click_pos, newVal=(255, 0, 0), loDiff=(5, 5, 5, 5), upDiff=(5, 5, 5, 5))
+        image_x_pos = np.clip(int(y*y_scale_factor), 0, image.size().height())
+        image_y_pos = np.clip(int(x*x_scale_factor), 0, image.size().width())
+        _, _, mask, _ = cv2.floodFill(image_np, None, seedPoint=(image_x_pos, image_y_pos), newVal=(255, 0, 0), loDiff=(5, 5, 5, 5), upDiff=(5, 5, 5, 5))
+
+
+        self.masks[self.fileList[self.indexImage]] = mask
+        plt.imshow(mask, cmap=plt.cm.gray)
+        plt.show()
+
+
+
         #self.maskOverlay
     def setWandCursor(self):
         # 1. Set the cursor map
@@ -214,8 +225,19 @@ class Window(QMainWindow):
         self.magicWandSizeSlider.setTickPosition(self.magicWandRoundSize)
         self.magicWandSizeSlider.setFixedSize(200, 20)
         self.magicWandSizeSlider.valueChanged.connect(self.updateMagicWandSize)
+        labels = QWidget()
+        slider_hbox = QHBoxLayout()
+        labels.setLayout(slider_hbox)
+        slider_hbox.setContentsMargins(0, 0, 0, 0)
+        label_minimum = QLabel(alignment=Qt.AlignLeft)
+        label_minimum.setText(str(self.magicWandSizeSlider.minimum()))
+        label_maximum = QLabel(alignment=Qt.AlignRight)
+        label_maximum.setText(str(self.magicWandSizeSlider.maximum()))
 
+        slider_hbox.addWidget(label_minimum, Qt.AlignLeft)
+        slider_hbox.addWidget(label_maximum, Qt.AlignRight)
         magicWandSettingsLayout.addWidget(self.magicWandSizeSlider, Qt.AlignTop)
+        magicWandSettingsLayout.addWidget(labels, Qt.AlignTop)
         ########### Image button selector ######################
 
         buttonsSpace = QWidget()
