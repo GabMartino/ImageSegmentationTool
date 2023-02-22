@@ -6,16 +6,18 @@ import cv2
 import hydra
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QUrl, QPoint, QSize, QRect
-from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter, QColor
+from PyQt5.QtCore import Qt, QUrl, QPoint, QSize, QRect, QPointF
+from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter, QColor, QRegion, QPen
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
     QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy, QSlider
 from PIL import Image
 from matplotlib import pyplot as plt
+from skimage.morphology import flood_fill
 
+from SegmentationLabeling.src.components.ImageViewer import CustomImageView
 from SegmentationLabeling.src.components.Toolbar import Toolbar
 
-
+'''
 # Image View class
 class CustomImageView(QLabel):
 
@@ -52,7 +54,7 @@ class CustomImageView(QLabel):
 
 
 
-
+'''
 class Window(QMainWindow):
     """Main Window."""
     def __init__(self, width=1024, height=640, parent=None):
@@ -102,47 +104,46 @@ class Window(QMainWindow):
     def createActions(self):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
+    def drawMask(self, mask):
+
+        self.imageOverlay.drawSegment(mask)
 
     def createMask(self, info):
-        overlay_size, click_pos = info
 
-        x = click_pos.x()
-        y = click_pos.y()
+        def findAverageColorInRoundArea(image, center, radius):
+            x, y = center
+            square_patch = image[x - radius:x + radius, y - radius: y + radius]
+            print(square_patch.shape, square_patch.size)
+            ## TODO: implement round patch
+            square_patch = square_patch.reshape((square_patch.shape[0]*square_patch.shape[1], square_patch.shape[2]))
+            averageColor = np.mean(square_patch, axis=0).astype(int)
+            stds_colors = np.std(square_patch, axis=0).astype(int)
+            return averageColor, stds_colors
 
-        image = self.imageOverlay.pixmap().toImage()
-        print(overlay_size, click_pos, image.size())
+        image = self.imageOverlay.pixmap().toImage() ## RealImage with actual size
+        overlay_size, click_pos = info ## Overlay size and click position on the overlay
+        realSize_image = image.size() ## Real image size
 
-        x_scale_factor = image.size().width()/overlay_size.width()
-        y_scale_factor = image.size().height()/overlay_size.height()
-        print(x_scale_factor, y_scale_factor)
-        #x *= x_scale_factor
-        #y *= y_scale_factor
+        scaled_image = image.scaled(overlay_size) ## image scaled in the size of the overlay to work easily
         import qimage2ndarray
-        image_np = qimage2ndarray.rgb_view(image).copy()
-        print(image_np.shape)
-        self.colorPoints = []
+        scaled_image_np = qimage2ndarray.rgb_view(image).copy()
+
+        x, y = click_pos.x(), click_pos.y()
+
         radius = self.toolbar.magicWand.magicWandRadius
-        for x_i in range(x - radius, x + radius, 2):
-            for y_i in range(y - radius, y + radius, 2):
-                if (x_i - x)**2 + (y_i - y)**2 <= radius**2:
-                    image_x_pos = np.clip(int(y_i*y_scale_factor), 0, image.size().height())
-                    image_y_pos = np.clip(int(x_i*x_scale_factor), 0, image.size().width())
-                    self.colorPoints.append(image_np[image_x_pos, image_y_pos])
+        average_color, stds_colors = findAverageColorInRoundArea(scaled_image_np,(x, y), radius)
 
-        averageColor = np.mean(np.array(self.colorPoints), axis=0).astype(int)
-        self.toolbar.magicWand.setViewedColor(tuple(averageColor))
-        image_x_pos = np.clip(int(y*y_scale_factor), 0, image.size().height())
-        image_y_pos = np.clip(int(x*x_scale_factor), 0, image.size().width())
-        _, _, mask, _ = cv2.floodFill(image_np, None, seedPoint=(image_x_pos, image_y_pos), newVal=(255, 0, 0), loDiff=(5, 5, 5, 5), upDiff=(5, 5, 5, 5))
-
-
-        self.masks[self.fileList[self.indexImage]] = mask
-        plt.imshow(mask, cmap=plt.cm.gray)
-        plt.show()
+        self.toolbar.magicWand.setViewedColor(tuple(average_color))
 
 
 
-        #self.maskOverlay
+        retval, image, mask, rect = cv2.floodFill(scaled_image_np, None, seedPoint=(x, y),
+                                                  newVal=(255, 0, 0), loDiff=(1.5,) * 3, upDiff=(1.5,) * 3)
+
+        img = cv2.resize(image, (realSize_image.width(), realSize_image.height()), interpolation=cv2.INTER_CUBIC)
+        self.drawMask(img)
+
+
     def setWandCursor(self):
         # 1. Set the cursor map
         cursor_pix = QPixmap("./resources/circle-icon.png")
@@ -240,20 +241,21 @@ class Window(QMainWindow):
 
 
     def showImage(self, increment=True, firstCall=False):
-        if not firstCall :
-            if increment:
-                self.indexImage = (self.indexImage + 1) % len(self.fileList)
-            else:
-                self.indexImage = (self.indexImage - 1) % len(self.fileList)
+        if self.fileList:
+            if not firstCall :
+                if increment:
+                    self.indexImage = (self.indexImage + 1) % len(self.fileList)
+                else:
+                    self.indexImage = (self.indexImage - 1) % len(self.fileList)
 
-        filename = self.actualDirectory + "/" + self.fileList[self.indexImage]
-        image = QImage(filename)
-        if image.isNull():
-            QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
-            return
+            filename = self.actualDirectory + "/" + self.fileList[self.indexImage]
+            image = QImage(filename)
+            if image.isNull():
+                QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
+                return
 
-        self.imageOverlay.setPixmap(QPixmap.fromImage(image))
-        self.toolbar.imageSelector.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
+            self.imageOverlay.setPixmap(QPixmap.fromImage(image))
+            self.toolbar.imageSelector.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
