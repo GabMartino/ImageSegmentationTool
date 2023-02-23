@@ -94,14 +94,23 @@ def _find_exterior_contours(img):
     elif len(ret) == 3:
         return ret[1]
     raise Exception("Check the signature for `cv.findContours()`.")
+
+
 class MagicWand(QWidget):
 
     def __init__(self):
         super().__init__()
         self.magicWandRadius = 10
+        self.connectivity = 4
+        self.tolerance = 32
 
+        self._flood_fill_flags = (
+                self.connectivity | cv.FLOODFILL_FIXED_RANGE | cv.FLOODFILL_MASK_ONLY | 255 << 8
+        )
         self.setup()
         self.show()
+
+
     def setup(self):
         mainLayout = QVBoxLayout()
         self.setLayout(mainLayout)
@@ -126,6 +135,8 @@ class MagicWand(QWidget):
         mainLayout.addWidget(self.wandSet)
         mainLayout.addWidget(self.slider)
 
+    def setupMagicWand(self):
+        pass
     def setViewedColor(self, color):
         r, g, b = color
         palette = QPalette()
@@ -140,21 +151,19 @@ class MagicWand(QWidget):
         colorText += rgb_to_hex(r, g, b)
         self.colorLabel.setText(colorText)
 
-    def createMask(self):
-        tolerance = 32
-        tolerance = (tolerance,) * 3
+    def createMask(self, img, selected_point):
+        self.img = img
+        x, y = selected_point
+        tolerance = (self.tolerance,) * 3
 
         h, w = img.shape[:2]
-        connectivity = 4
-        mask = np.zeros((h, w), dtype=np.uint8)
+        self.mask = np.zeros((h, w), dtype=np.uint8)
         self._flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
-        self._flood_fill_flags = (
-                connectivity | cv.FLOODFILL_FIXED_RANGE | cv.FLOODFILL_MASK_ONLY | 255 << 8
-        )
+
 
         self._flood_mask[:] = 0
         cv.floodFill(
-            img,
+            self.img,
             self._flood_mask,
             (x, y),
             0,
@@ -163,7 +172,7 @@ class MagicWand(QWidget):
             self._flood_fill_flags,
         )
 
-        modifier = flags & (ALT_KEY + SHIFT_KEY)
+        modifier = (ALT_KEY + SHIFT_KEY)
 
         flood_mask = self._flood_mask[1:-1, 1:-1].copy()
         if modifier == (ALT_KEY + SHIFT_KEY):
@@ -173,18 +182,25 @@ class MagicWand(QWidget):
         elif modifier == ALT_KEY:
             self.mask = cv.bitwise_and(self.mask, cv.bitwise_not(flood_mask))
         else:
-            self.mask = flood_mask
+            print("ok")
+        self.mask = flood_mask
 
-        def _update(self):
-            """Updates an image in the already drawn window."""
-            viz = self.img.copy()
-            contours = _find_exterior_contours(self.mask)
-            viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=-1)
-            viz = cv.addWeighted(self.img, 0.75, viz, 0.25, 0)
-            viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=1)
+        return self._update()
+    def _update(self):
+        """Updates an image in the already drawn window."""
+        viz = self.img.copy()
+        print(self.mask)
+        contours = _find_exterior_contours(self.mask)
+        viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=-1)
+        viz = cv.addWeighted(self.img, 0.75, viz, 0.25, 0)
+        viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=1)
+        return viz
+        '''
+        
+        self.mean, self.stddev = cv.meanStdDev(self.img, mask=self.mask)
+        meanstr = "mean=({:.2f}, {:.2f}, {:.2f})".format(*self.mean[:, 0])
+        stdstr = "std=({:.2f}, {:.2f}, {:.2f})".format(*self.stddev[:, 0])
+        cv.imshow(self.name, viz)
+        cv.displayStatusBar(self.name, ", ".join((meanstr, stdstr)))
 
-            self.mean, self.stddev = cv.meanStdDev(self.img, mask=self.mask)
-            meanstr = "mean=({:.2f}, {:.2f}, {:.2f})".format(*self.mean[:, 0])
-            stdstr = "std=({:.2f}, {:.2f}, {:.2f})".format(*self.stddev[:, 0])
-            cv.imshow(self.name, viz)
-            cv.displayStatusBar(self.name, ", ".join((meanstr, stdstr)))
+        '''

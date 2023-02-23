@@ -2,7 +2,6 @@ import os
 import pathlib
 import sys
 
-import cv2
 import hydra
 import numpy as np
 import pyqtgraph as pg
@@ -107,6 +106,7 @@ class Window(QMainWindow):
 
     def createMask(self, info):
 
+
         def findAverageColorInRoundArea(image, center, radius):
             x, y = center
             square_patch = image[x - radius:x + radius, y - radius: y + radius]
@@ -123,25 +123,13 @@ class Window(QMainWindow):
 
         scaled_image = image.scaled(overlay_size) ## image scaled in the size of the overlay to work easily
         import qimage2ndarray
-        scaled_image_np = qimage2ndarray.rgb_view(image).copy()
+        scaled_image_np = qimage2ndarray.rgb_view(scaled_image).copy()
 
         x, y = click_pos.x(), click_pos.y()
-
-        radius = self.toolbar.magicWand.magicWandRadius
-        average_color, stds_colors = findAverageColorInRoundArea(scaled_image_np,(x, y), radius)
-
-        self.toolbar.magicWand.setViewedColor(tuple(average_color))
-
-
-
-        retval, image, mask, rect = cv2.floodFill(scaled_image_np, None, seedPoint=(x, y),
-                                                  newVal=(255, 0, 0), loDiff=(1.5,) * 3, upDiff=(1.5,) * 3)
-
-        img = cv2.resize(image, (realSize_image.width(), realSize_image.height()), interpolation=cv2.INTER_CUBIC)
-
-        self.imageOverlay.drawSegment(mask)
-
-
+        image_masked = self.toolbar.magicWand.createMask(scaled_image_np, (x,y)).copy()
+        q_im = qimage2ndarray.array2qimage(image_masked)
+        self.imageOverlay.setPixmap(QPixmap(q_im))
+        
     def setWandCursor(self):
         # 1. Set the cursor map
         cursor_pix = QPixmap("./resources/circle-icon.png")

@@ -13,5 +13,4 @@ class MaskTable(QTableWidget):
         newItem = QTableWidgetItem
         self.setItem()
     def setup(self):
-        self.setRowCount(10)
-        self.setColumnCount(3)
+        pass
