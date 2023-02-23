@@ -1,3 +1,5 @@
+import numpy as np
+import cv2 as cv
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QPalette, QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSlider
@@ -81,6 +83,17 @@ class MagicWandSlider(QWidget):
         self.slider.valueChanged.connect(method)
 
 
+
+SHIFT_KEY = cv.EVENT_FLAG_SHIFTKEY
+ALT_KEY = cv.EVENT_FLAG_ALTKEY
+
+def _find_exterior_contours(img):
+    ret = cv.findContours(img, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    if len(ret) == 2:
+        return ret[0]
+    elif len(ret) == 3:
+        return ret[1]
+    raise Exception("Check the signature for `cv.findContours()`.")
 class MagicWand(QWidget):
 
     def __init__(self):
@@ -126,3 +139,52 @@ class MagicWand(QWidget):
         colorText = "(" + str(r) + ", " + str(g) + ", " + str(b) + ")\n"
         colorText += rgb_to_hex(r, g, b)
         self.colorLabel.setText(colorText)
+
+    def createMask(self):
+        tolerance = 32
+        tolerance = (tolerance,) * 3
+
+        h, w = img.shape[:2]
+        connectivity = 4
+        mask = np.zeros((h, w), dtype=np.uint8)
+        self._flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
+        self._flood_fill_flags = (
+                connectivity | cv.FLOODFILL_FIXED_RANGE | cv.FLOODFILL_MASK_ONLY | 255 << 8
+        )
+
+        self._flood_mask[:] = 0
+        cv.floodFill(
+            img,
+            self._flood_mask,
+            (x, y),
+            0,
+            tolerance,
+            tolerance,
+            self._flood_fill_flags,
+        )
+
+        modifier = flags & (ALT_KEY + SHIFT_KEY)
+
+        flood_mask = self._flood_mask[1:-1, 1:-1].copy()
+        if modifier == (ALT_KEY + SHIFT_KEY):
+            self.mask = cv.bitwise_and(self.mask, flood_mask)
+        elif modifier == SHIFT_KEY:
+            self.mask = cv.bitwise_or(self.mask, flood_mask)
+        elif modifier == ALT_KEY:
+            self.mask = cv.bitwise_and(self.mask, cv.bitwise_not(flood_mask))
+        else:
+            self.mask = flood_mask
+
+        def _update(self):
+            """Updates an image in the already drawn window."""
+            viz = self.img.copy()
+            contours = _find_exterior_contours(self.mask)
+            viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=-1)
+            viz = cv.addWeighted(self.img, 0.75, viz, 0.25, 0)
+            viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=1)
+
+            self.mean, self.stddev = cv.meanStdDev(self.img, mask=self.mask)
+            meanstr = "mean=({:.2f}, {:.2f}, {:.2f})".format(*self.mean[:, 0])
+            stdstr = "std=({:.2f}, {:.2f}, {:.2f})".format(*self.stddev[:, 0])
+            cv.imshow(self.name, viz)
+            cv.displayStatusBar(self.name, ", ".join((meanstr, stdstr)))

@@ -104,16 +104,13 @@ class Window(QMainWindow):
     def createActions(self):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
-    def drawMask(self, mask):
-
-        self.imageOverlay.drawSegment(mask)
 
     def createMask(self, info):
 
         def findAverageColorInRoundArea(image, center, radius):
             x, y = center
             square_patch = image[x - radius:x + radius, y - radius: y + radius]
-            print(square_patch.shape, square_patch.size)
+
             ## TODO: implement round patch
             square_patch = square_patch.reshape((square_patch.shape[0]*square_patch.shape[1], square_patch.shape[2]))
             averageColor = np.mean(square_patch, axis=0).astype(int)
@@ -141,7 +138,8 @@ class Window(QMainWindow):
                                                   newVal=(255, 0, 0), loDiff=(1.5,) * 3, upDiff=(1.5,) * 3)
 
         img = cv2.resize(image, (realSize_image.width(), realSize_image.height()), interpolation=cv2.INTER_CUBIC)
-        self.drawMask(img)
+
+        self.imageOverlay.drawSegment(mask)
 
 
     def setWandCursor(self):
@@ -254,7 +252,7 @@ class Window(QMainWindow):
                 QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
                 return
 
-            self.imageOverlay.setPixmap(QPixmap.fromImage(image))
+            self.imageOverlay.setPixmap(QPixmap.fromImage(image).scaled(self.imageOverlay.size(), Qt.KeepAspectRatio))
             self.toolbar.imageSelector.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
 
 
