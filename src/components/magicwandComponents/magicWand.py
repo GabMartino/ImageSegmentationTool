@@ -45,12 +45,14 @@ class ColorLabel(QLabel):
 
 class MagicWandSlider(QWidget):
 
-    def __init__(self):
+    def __init__(self, startPosition):
         super().__init__()
 
-        self.setup()
+        self.setup(startPosition)
 
-    def setup(self):
+    def updateCurrentSliderPositionLabel(self):
+        self.label_current.setText(str(self.slider.sliderPosition()))
+    def setup(self, startPosition):
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -60,7 +62,10 @@ class MagicWandSlider(QWidget):
         self.slider.setMinimum(1)
         self.slider.setMaximum(150)
         self.slider.setTickPosition(10)
-        self.slider.setFixedSize(200, 20)
+        self.slider.setSliderPosition(startPosition)
+        self.slider.valueChanged.connect(self.updateCurrentSliderPositionLabel)
+        #self.slider.setFixedSize(200, 20)
+        #self.slider.set
 
         labels = QWidget()
 
@@ -70,10 +75,13 @@ class MagicWandSlider(QWidget):
 
         label_minimum = QLabel(alignment=Qt.AlignLeft)
         label_minimum.setText(str(self.slider.minimum()))
+        self.label_current = QLabel(alignment=Qt.AlignCenter)
+        self.label_current.setText(str(self.slider.sliderPosition()))
         label_maximum = QLabel(alignment=Qt.AlignRight)
         label_maximum.setText(str(self.slider.maximum()))
 
         slider_hbox.addWidget(label_minimum, Qt.AlignLeft)
+        slider_hbox.addWidget(self.label_current, Qt.AlignCenter)
         slider_hbox.addWidget(label_maximum, Qt.AlignRight)
 
         layout.addWidget(self.slider)
@@ -128,7 +136,7 @@ class MagicWand(QWidget):
         lineLayout.addWidget(self.colorSelected)
         lineLayout.addWidget(self.colorLabel)
 
-        self.slider = MagicWandSlider()
+        self.slider = MagicWandSlider(self.magicWandRadius)
 
 
 
