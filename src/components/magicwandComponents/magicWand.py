@@ -135,22 +135,29 @@ class MagicWand(QWidget):
         mainLayout.addWidget(self.wandSet)
         mainLayout.addWidget(self.slider)
 
-    def setupMagicWand(self):
-        pass
+
     def setViewedColor(self, color):
-        r, g, b = color
-        palette = QPalette()
-        palette.setColor(self.colorSelected.backgroundRole(), QColor(r, g, b))
-        self.colorSelected.setAutoFillBackground(True)
-        self.colorSelected.setPalette(palette)
+        if color is not None:
+            r, g, b = color
+            print(color)
+            palette = QPalette()
+            palette.setColor(self.colorSelected.backgroundRole(), QColor(r, g, b))
+            self.colorSelected.setAutoFillBackground(True)
+            self.colorSelected.setPalette(palette)
 
-        def rgb_to_hex(r, g, b):
-            return '#{:02x}{:02x}{:02x}'.format(r, g, b)
+            def rgb_to_hex(r, g, b):
+                return '#{:02x}{:02x}{:02x}'.format(r, g, b)
 
-        colorText = "(" + str(r) + ", " + str(g) + ", " + str(b) + ")\n"
-        colorText += rgb_to_hex(r, g, b)
-        self.colorLabel.setText(colorText)
+            colorText = "(" + str(r) + ", " + str(g) + ", " + str(b) + ")\n"
+            colorText += rgb_to_hex(r, g, b)
+            self.colorLabel.setText(colorText)
+        else:
+            self.colorLabel.setText("Unselected Color")
 
+    def getMask(self):
+        return self.mask
+    def saveMask(self, callbackMethod):
+        pass
     def createMask(self, img, selected_point):
         self.img = img
         x, y = selected_point
@@ -189,7 +196,6 @@ class MagicWand(QWidget):
     def _update(self):
         """Updates an image in the already drawn window."""
         viz = self.img.copy()
-        print(self.mask)
         contours = _find_exterior_contours(self.mask)
         viz = cv.drawContours(viz, contours, -1, color=(255,) * 3, thickness=-1)
         viz = cv.addWeighted(self.img, 0.75, viz, 0.25, 0)
@@ -204,3 +210,7 @@ class MagicWand(QWidget):
         cv.displayStatusBar(self.name, ", ".join((meanstr, stdstr)))
 
         '''
+
+        ## TODO: avoid selecting part already selected
+        ## TODO: save mask of selected part
+        ## TODO: adding mask in the table

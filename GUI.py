@@ -113,9 +113,11 @@ class Window(QMainWindow):
 
             ## TODO: implement round patch
             square_patch = square_patch.reshape((square_patch.shape[0]*square_patch.shape[1], square_patch.shape[2]))
-            averageColor = np.mean(square_patch, axis=0).astype(int)
-            stds_colors = np.std(square_patch, axis=0).astype(int)
+            averageColor = np.mean(square_patch, axis=0).astype(int) if np.any(square_patch) else None
+            stds_colors = np.std(square_patch, axis=0).astype(int) if np.any(square_patch) else None
             return averageColor, stds_colors
+
+
 
         image = self.imageOverlay.pixmap().toImage() ## RealImage with actual size
         overlay_size, click_pos = info ## Overlay size and click position on the overlay
@@ -126,10 +128,13 @@ class Window(QMainWindow):
         scaled_image_np = qimage2ndarray.rgb_view(scaled_image).copy()
 
         x, y = click_pos.x(), click_pos.y()
+        radius = self.toolbar.magicWand.magicWandRadius
+        averageColor, stds_colors = findAverageColorInRoundArea(scaled_image_np, (x, y), radius)
+        self.toolbar.magicWand.setViewedColor(averageColor)
         image_masked = self.toolbar.magicWand.createMask(scaled_image_np, (x,y)).copy()
         q_im = qimage2ndarray.array2qimage(image_masked)
         self.imageOverlay.setPixmap(QPixmap(q_im))
-        
+
     def setWandCursor(self):
         # 1. Set the cursor map
         cursor_pix = QPixmap("./resources/circle-icon.png")
