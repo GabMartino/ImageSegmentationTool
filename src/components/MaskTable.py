@@ -22,6 +22,8 @@ class MaskTable(QWidget):
             QMessageBox.information(self, "Label not Selected", "Select a label to save the mask.")
             return
         selectedMask = self.parent().magicWand.getMask()
+
+        print(selectedMask)
         if selectedMask:
             pass
 
