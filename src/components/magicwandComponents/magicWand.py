@@ -1,3 +1,5 @@
+from random import random
+
 import numpy as np
 import cv2 as cv
 from PyQt5 import QtCore
@@ -47,9 +49,13 @@ class ColorLabel(QLabel):
 
 class MagicWandSlider(QWidget):
 
-    def __init__(self, startPosition, title):
+    def __init__(self, startPosition, title, min, max, tick=1.):
         super().__init__()
         self.title = title
+        self.min = min
+        self.max = max
+        self.tick = tick
+
         self.setup(startPosition)
 
     def updateCurrentSliderPositionLabel(self):
@@ -61,9 +67,10 @@ class MagicWandSlider(QWidget):
 
         self.slider = QSlider(Qt.Horizontal)
 
-        self.slider.setMinimum(1)
-        self.slider.setMaximum(150)
-        self.slider.setTickPosition(10)
+        self.slider.setMinimum(self.min)
+        self.slider.setMaximum(self.max)
+        #self.slider.setTickPosition(10)
+        self.slider.setTickInterval(self.tick)
         self.slider.setSliderPosition(startPosition)
         self.slider.valueChanged.connect(self.updateCurrentSliderPositionLabel)
         #self.slider.setFixedSize(200, 20)
@@ -95,29 +102,26 @@ class MagicWandSlider(QWidget):
     def setValueChangedCallback(self, method):
         self.slider.valueChanged.connect(method)
 
-SHIFT_KEY = cv.EVENT_FLAG_SHIFTKEY
-ALT_KEY = cv.EVENT_FLAG_ALTKEY
-
-
 
 
 class MagicWand(QWidget):
 
     def __init__(self):
         super().__init__()
-
         self.magicWandRadius = 10
         self.connectivity = 4
-        self.tolerance = 32
+        self.tolerance = 1
         self.modifier = None
         self._flood_fill_flags = (
                 self.connectivity | cv.FLOODFILL_FIXED_RANGE | cv.FLOODFILL_MASK_ONLY | 255 << 8
         )
+
+        self.variableHook = None
         self.setup()
         self.show()
 
     def updateTolerance(self):
-        self.tolerance = self.toleranceSlider.slider.sliderPosition()
+        self.tolerance = self.toleranceSlider.slider.sliderPosition()/10
 
     def setup(self):
         mainLayout = QVBoxLayout()
@@ -136,9 +140,10 @@ class MagicWand(QWidget):
         lineLayout.addWidget(self.colorSelected)
         lineLayout.addWidget(self.colorLabel)
 
-        self.slider = MagicWandSlider(self.magicWandRadius, "MagicWand Size" )
-        self.toleranceSlider = MagicWandSlider(self.tolerance, "MagicWand Tolerance")
+        self.slider = MagicWandSlider(self.magicWandRadius, "MagicWand Size", 1, 150 )
+        self.toleranceSlider = MagicWandSlider(self.tolerance, "MagicWand Tolerance", 1, 50)
         self.toleranceSlider.setValueChangedCallback(self.updateTolerance)
+
 
 
         mainLayout.addWidget(self.wandSet)
@@ -149,7 +154,6 @@ class MagicWand(QWidget):
     def setViewedColor(self, color):
         if color is not None:
             r, g, b = color
-            print(color)
             palette = QPalette()
             palette.setColor(self.colorSelected.backgroundRole(), QColor(r, g, b))
             self.colorSelected.setAutoFillBackground(True)
@@ -166,6 +170,9 @@ class MagicWand(QWidget):
 
     def getMask(self):
         return self.mask
+
+
+
     def saveMask(self, callbackMethod):
         pass
 
@@ -174,12 +181,30 @@ class MagicWand(QWidget):
 
     '''
         This method create a mask from a selected point in the 2D space of the image (x,y) and the image itself
+        Let's consider a selected point with r, g, b
+        and a standard deviation of x, y, z so the lower and upper tolerance will be
         
+            r - std_r <= ri <= r + std_r
+            
+        but also 
+                0 <= r_i <= 255
+            
+        so
+            std_r = r
+            std_r = 255 - r
+        
+        point 
     '''
-    def createMask(self, img, selected_point):
-        self.img = img
+    def createMask(self, img, selected_point, avg_color, std_color):
+        self.img = img.copy()
         x, y = selected_point
-        tolerance = (self.tolerance,) * 3
+        tolerance = tuple(std_color)#(self.tolerance,) * 3
+        lowerTolerance = (int(np.clip(self.tolerance*tolerance[0], self.tolerance*tolerance[0], avg_color[0])),
+                          int(np.clip(self.tolerance*tolerance[1], self.tolerance*tolerance[0], avg_color[1])),
+                          int(np.clip(self.tolerance*tolerance[2], self.tolerance*tolerance[0], avg_color[2])))
+        upperTolerance = (int(np.clip(self.tolerance*tolerance[0], 0, 255 - avg_color[0])),
+                          int(np.clip(self.tolerance*tolerance[1], 0, 255 - avg_color[1])),
+                          int(np.clip(self.tolerance*tolerance[2], 0, 255 - avg_color[2])))
 
         h, w = img.shape[:2]
         self.mask = np.zeros((h, w), dtype=np.uint8) ## Create a mask that is the total and final
@@ -192,18 +217,21 @@ class MagicWand(QWidget):
             self._flood_mask,
             (x, y),
             0,
-            tolerance,
-            tolerance,
+            lowerTolerance,
+            upperTolerance,
             self._flood_fill_flags,
         )
 
         flood_mask = self._flood_mask[1:-1, 1:-1].copy() ## make a copy removing 2 pixels
-        if self.modifier == "SHIFT":
+        if self.modifier == "SHIFT": ## ADD AREAS TO MASK
             self.mask = cv.bitwise_or(self.mask, flood_mask) ## if the shift is press "ADD" the last mask with the new one
-        elif self.modifier == "ALT":
+
+        elif self.modifier == "CTRL": ## REMOVE AREAS TO MASK
             self.mask = cv.bitwise_and(self.mask, cv.bitwise_not(flood_mask)) ## if ALT is pressed make the AND with NOT of the new new mask -> delete part
+
         else:
             self.mask = flood_mask ## otherwise simply overwrite
+
         return self._update()
 
 
@@ -217,33 +245,65 @@ class MagicWand(QWidget):
     '''
     def _find_exterior_contours(self, mask):
         ## lets filter the mask to eliminate some noise
-        mask = cv.morphologyEx(mask, cv.MORPH_OPEN,cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
-        print(mask)
+        #mask = cv.morphologyEx(mask, cv.MORPH_OPEN,cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        #print(mask)
         contours = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        contour = contours[0] if len(contours) == 2 else contours[1]
-        big_contour = max(contour, key=cv.contourArea)
+        contour = None
+        if len(contours) == 2:
+            contour = contours[0]
+        elif len(contours) == 3:
+            contour = contours[1]
+        else:
+            raise Exception("Check the signature for `cv.findContours()`.")
+        print(contour)
+        contour = max(contour, key=cv.contourArea) if len(contour) > 0 else None
 
-        epsilon = 0.0001 * cv.arcLength(big_contour, True)
-        approx = cv.approxPolyDP(big_contour, epsilon, True)
+        #epsilon = 0.0001 * cv.arcLength(big_contour, True)
+        #approx = cv.approxPolyDP(big_contour, epsilon, True)
 
 
-        return approx
+        return contour
 
     def _update(self):
         """Updates an image in the already drawn window."""
         viz = self.img.copy()
         contours = self._find_exterior_contours(self.mask) ##find countours of the binary image mask
-        #print(contours.shape)
-        viz = cv.drawContours(viz, [contours], -1, color=(255,) * 3, thickness=-1)
-        viz = cv.addWeighted(self.img, 0.75, viz, 0.25, 0)
-        viz = cv.drawContours(viz, [contours], -2, color=(255,) * 3, thickness=1)
+        print(contours.shape)
+
+        ## Generate random color for the mask
+        from random import randrange
+        maskColor = (randrange(255), randrange(255), randrange(255))
+
+        '''
+            Overlap the mask to the image
+        '''
+        viz = cv.drawContours(viz, [contours], -1, color=maskColor, thickness=-2)
+        viz = cv.addWeighted(self.img, 0.70, viz, 0.30, 0)
+        viz = cv.drawContours(viz, [contours], -2, color=maskColor, thickness=1)
+
+
         return viz
 
 
+
     def keyPressEvent(self, event):
+
+        if event.isAutoRepeat():
+            return
+
         if event.key() == QtCore.Qt.Key_Shift:
             self.modifier = "SHIFT"
-        elif event.key() == QtCore.Qt.Key_Alt:
-            self.modifier = "ALT"
+            self.variableHook.setText("SHIFT PRESSED")
+        elif event.key() == QtCore.Qt.Key_Control:
+            self.modifier = "CTRL"
+            self.variableHook.setText("CTRL PRESSED")
+
 
         event.accept()
+
+    def keyReleaseEvent(self, event):
+
+       # if event.isAutoRepeat():
+        #    return
+        self.modifier = None
+        self.variableHook.setText("")

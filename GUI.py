@@ -16,44 +16,7 @@ from skimage.morphology import flood_fill
 from SegmentationLabeling.src.components.ImageViewer import CustomImageView
 from SegmentationLabeling.src.components.Toolbar import Toolbar
 
-'''
-# Image View class
-class CustomImageView(QLabel):
 
-    # constructor which inherit original
-    # ImageView
-    def __init__(self):
-        super().__init__()
-        self.setBackgroundRole(QPalette.Base)
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.setScaledContents(True)
-        self.setAlignment(Qt.AlignCenter)
-        self.setText("Open an Image folder to start labeling segments...")
-
-        self.mousePressCallback = None
-
-    def setMouseReleaseFunctionCallback(self, method):
-        self.mousePressCallback = method
-
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.pressPos = event.pos()
-
-    def mouseReleaseEvent(self, event):
-        # ensure that the left button was pressed *and* released within the
-        # geometry of the widget; if so, emit the signal;
-        if (self.pressPos is not None and
-                event.button() == Qt.LeftButton and
-                event.pos() in self.rect()):
-            if self.mousePressCallback is not None:
-                info = (self.rect().size(), event.pos())
-                self.mousePressCallback(info)
-        self.pressPos = None
-
-
-
-'''
 class Window(QMainWindow):
     """Main Window."""
     def __init__(self, width=1024, height=640, parent=None):
@@ -64,7 +27,7 @@ class Window(QMainWindow):
 
         self.indexImage = None
         self.fileList = None
-
+        self.actualQImage = None
 
         self.UIComponents()
         self.createActions()
@@ -88,8 +51,9 @@ class Window(QMainWindow):
         self.mainWidget.setLayout(layout)
         self.setCentralWidget(self.mainWidget)
 
-        self.setupToolbar()
+
         self.setupImageViewer()
+        self.setupToolbar()
 
         self.masks = {}
 
@@ -119,21 +83,38 @@ class Window(QMainWindow):
 
 
 
-        image = self.imageOverlay.pixmap().toImage() ## RealImage with actual size
+        image = self.actualQImage ## RealImage with actual size
         overlay_size, click_pos = info ## Overlay size and click position on the overlay
         realSize_image = image.size() ## Real image size
 
         scaled_image = image.scaled(overlay_size) ## image scaled in the size of the overlay to work easily
         import qimage2ndarray
         scaled_image_np = qimage2ndarray.rgb_view(scaled_image).copy()
-
+        scaled_image_np = np.swapaxes(scaled_image_np, 0, 1)
         x, y = click_pos.x(), click_pos.y()
+
+
+        '''
+            Get radius, average color, standard deviation
+            
+        '''
         radius = self.toolbar.magicWand.magicWandRadius
         averageColor, stds_colors = findAverageColorInRoundArea(scaled_image_np, (x, y), radius)
         self.toolbar.magicWand.setViewedColor(averageColor)
-        image_masked = self.toolbar.magicWand.createMask(scaled_image_np, (x,y)).copy()
+        '''
+            Create the mask from the pixel clicked.
+            Parameters:
+            - Scaled image: to speed up the mask finding
+            - (x,y) coordinates of the click point on the scaled image
+            - 
+    
+        '''
+        image_masked = self.toolbar.magicWand.createMask(scaled_image_np, (x, y), averageColor, stds_colors ).copy()
+        #image_masked = np.swapaxes(image_masked, 1, 0)
+        
         q_im = qimage2ndarray.array2qimage(image_masked)
         self.imageOverlay.setPixmap(QPixmap(q_im))
+
 
     def setWandCursor(self):
         # 1. Set the cursor map
@@ -182,7 +163,21 @@ class Window(QMainWindow):
         self.imageOverlay = CustomImageView()
         self.imageOverlay.setMouseReleaseFunctionCallback(self.openFile)
 
-        imageViewerLayout.addWidget(self.imageOverlay)
+        guide = QLabel()
+        guide.setFixedHeight(35)
+        guide.setText("KEEP PRESSED 'ALT'/'CTRL' KEY TO REMOVE/ADD AREAS TO THE MASK")
+
+        self.keyPressed = QLabel()
+        self.keyPressed.setStyleSheet("color: red; padding: 0px 0px 0px 20px ;")
+        #keyPressed.setText("TEST")
+        guide.setFixedHeight(35)
+
+        imageViewerLayout.addWidget(self.imageOverlay, 0, 0, 1, 2)
+        imageViewerLayout.addWidget(guide, 1, 0)
+        imageViewerLayout.addWidget(self.keyPressed, 1, 1)
+
+        self.toolbar.magicWand.variableHook = self.keyPressed
+
 
     def _createActions(self):
 
@@ -245,6 +240,7 @@ class Window(QMainWindow):
                 QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
                 return
 
+            self.actualQImage = image
             self.imageOverlay.setPixmap(QPixmap.fromImage(image).scaled(self.imageOverlay.size(), Qt.KeepAspectRatio))
             self.toolbar.imageSelector.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
 

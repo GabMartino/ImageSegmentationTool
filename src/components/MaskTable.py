@@ -7,28 +7,42 @@ class MaskTable(QWidget):
     def __init__(self):
         super().__init__()
 
-
         self.masks = {}
-        self.actualImage = None
+        self.actualImageID = None
         self.setup()
 
 
-
     def setActualImage(self, actualImageID):
-        self.actualImage = actualImageID
+        self.actualImageID = actualImageID
+
+
     def insertMask(self):
+        '''
+            Get label checked
+        '''
         selectedLabel = self.parent().labelhandler.getCheckedLabel()
         if selectedLabel is None:
             QMessageBox.information(self, "Label not Selected", "Select a label to save the mask.")
             return
+
+        '''
+            Get mask from magic wand
+        '''
         selectedMask = self.parent().magicWand.getMask()
-
         print(selectedMask)
-        if selectedMask:
-            pass
+        if selectedMask is not None:
+            '''
+                Insert the mask in the list of the masks of the image of the label selected
+            '''
+            if self.actualImageID in self.masks:
+                self.masks[self.actualImageID].append(selectedMask)
+            else:
+                self.masks[self.actualImageID] = [selectedMask]
 
-        self.table.insertRow(self.table.rowCount())
-        self.table.setItem(self.table.rowCount() - 1, 0, QTableWidgetItem(selectedLabel))
+            self.table.insertRow(self.table.rowCount())
+            self.table.setItem(self.table.rowCount() - 1, 0, QTableWidgetItem(selectedLabel))
+        else:
+            QMessageBox.information(self, "No mask created", "Still no masks have been created.")
 
     def removeMask(self):
         select = self.table.selectionModel()
@@ -48,9 +62,10 @@ class MaskTable(QWidget):
         buttonsW.setLayout(buttonsLayout)
 
         self.table = QTableWidget()
-        self.table.setHorizontalHeaderLabels(["Masks' Labels"])
+        #self.table.setHorizontalHeaderLabels(["Masks' Labels"])
         self.table.setColumnWidth(0, 350)
         self.table.setColumnCount(1)
+        self.table.clicked.connect(self.handleMasksClicking)
 
         addMaskButton = QPushButton()
         addMaskButton.setText("Add Mask")
@@ -65,3 +80,15 @@ class MaskTable(QWidget):
 
         masktableLayout.addWidget(self.table)
         masktableLayout.addWidget(buttonsW)
+
+
+
+    '''
+        When some rows are clicked the mask selected should be shown
+    '''
+    def handleMasksClicking(self):
+        select = self.table.selectionModel()
+        selectedRows = select.selectedRows()
+        print(selectedRows)
+        for row in selectedRows:
+            print(row.row())
