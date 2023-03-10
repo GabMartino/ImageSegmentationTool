@@ -8,6 +8,8 @@ from PyQt5.QtGui import QPixmap, QIcon, QPalette, QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSlider
 from scipy.interpolate import splprep, splev
 
+from SegmentationLabeling.src.utils.utils import drawMaskOnImage
+
 
 class MagicWandButton(QPushButton):
 
@@ -172,13 +174,6 @@ class MagicWand(QWidget):
         return self.mask
 
 
-
-    def saveMask(self, callbackMethod):
-        pass
-
-
-
-
     '''
         This method create a mask from a selected point in the 2D space of the image (x,y) and the image itself
         Let's consider a selected point with r, g, b
@@ -193,9 +188,10 @@ class MagicWand(QWidget):
             std_r = r
             std_r = 255 - r
         
-        point 
+        point out that the axis of the image are inverted (width, height, 3)
+        
     '''
-    def createMask(self, img, selected_point, avg_color, std_color):
+    def createMask(self, img, selected_point, avg_color, std_color, temporary_mask=None):
         self.img = img.copy()
         x, y = selected_point
         tolerance = tuple(std_color)#(self.tolerance,) * 3
@@ -206,16 +202,16 @@ class MagicWand(QWidget):
                           int(np.clip(self.tolerance*tolerance[1], 0, 255 - avg_color[1])),
                           int(np.clip(self.tolerance*tolerance[2], 0, 255 - avg_color[2])))
 
-        h, w = img.shape[:2]
-        self.mask = np.zeros((h, w), dtype=np.uint8) ## Create a mask that is the total and final
-        self._flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8) ## create an empty mask that is the temporary mask
+        w, h = img.shape[:2]
+        self.mask = np.zeros((w, h), dtype=np.uint8) if temporary_mask is None else temporary_mask ## Create a mask that is the total and final
+        self._flood_mask = np.zeros((w + 2, h + 2), dtype=np.uint8) ## create an empty mask that is the temporary mask
 
 
         self._flood_mask[:] = 0 ## I dont know why again report zero
         cv.floodFill(
             self.img,
             self._flood_mask,
-            (x, y),
+            (y, x),
             0,
             lowerTolerance,
             upperTolerance,
@@ -232,57 +228,7 @@ class MagicWand(QWidget):
         else:
             self.mask = flood_mask ## otherwise simply overwrite
 
-        return self._update()
-
-
-    '''
-        This method find the countour of the mask (that is a binary image)
-        
-        There are three arguments in cv.findContours() function, first one is source image, 
-        second is contour retrieval mode, third is contour approximation method. And it outputs a modified image, 
-        the contours and hierarchy. contours is a Python list of all the contours in the image. Each individual contour 
-        is a Numpy array of (x,y) coordinates of boundary points of the object.
-    '''
-    def _find_exterior_contours(self, mask):
-        ## lets filter the mask to eliminate some noise
-        #mask = cv.morphologyEx(mask, cv.MORPH_OPEN,cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
-        #print(mask)
-        contours = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        contour = None
-        if len(contours) == 2:
-            contour = contours[0]
-        elif len(contours) == 3:
-            contour = contours[1]
-        else:
-            raise Exception("Check the signature for `cv.findContours()`.")
-        print(contour)
-        contour = max(contour, key=cv.contourArea) if len(contour) > 0 else None
-
-        #epsilon = 0.0001 * cv.arcLength(big_contour, True)
-        #approx = cv.approxPolyDP(big_contour, epsilon, True)
-
-
-        return contour
-
-    def _update(self):
-        """Updates an image in the already drawn window."""
-        viz = self.img.copy()
-        contours = self._find_exterior_contours(self.mask) ##find countours of the binary image mask
-        print(contours.shape)
-
-        ## Generate random color for the mask
-        from random import randrange
-        maskColor = (randrange(255), randrange(255), randrange(255))
-
-        '''
-            Overlap the mask to the image
-        '''
-        viz = cv.drawContours(viz, [contours], -1, color=maskColor, thickness=-2)
-        viz = cv.addWeighted(self.img, 0.70, viz, 0.30, 0)
-        viz = cv.drawContours(viz, [contours], -2, color=maskColor, thickness=1)
-
-
-        return viz
+        return drawMaskOnImage(self.img, self.mask)
 
 
 

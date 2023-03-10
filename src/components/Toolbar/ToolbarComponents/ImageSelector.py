@@ -21,12 +21,13 @@ class ImageSelector(QWidget):
         self.nextImageButton.setText("Next")
 
         self.imageCounter = QLabel()
+        self.imageCounter.setAlignment(Qt.AlignCenter)
 
 
         self.previuousImageButton = QPushButton()
         self.previuousImageButton.setText("Previous")
 
 
-        buttonsLayout.addWidget(self.previuousImageButton, Qt.AlignLeft)
-        buttonsLayout.addWidget(self.imageCounter, Qt.AlignCenter)
-        buttonsLayout.addWidget(self.nextImageButton, Qt.AlignRight)
+        buttonsLayout.addWidget(self.previuousImageButton)
+        buttonsLayout.addWidget(self.imageCounter)
+        buttonsLayout.addWidget(self.nextImageButton)

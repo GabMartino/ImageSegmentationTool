@@ -4,17 +4,13 @@ import sys
 
 import hydra
 import numpy as np
-import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QUrl, QPoint, QSize, QRect, QPointF
-from PyQt5.QtGui import QPixmap, QImage, QPalette, QIcon, QCursor, QPainter, QColor, QRegion, QPen
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QToolBar, QAction, QGridLayout, \
-    QHBoxLayout, QFileDialog, QWidget, QPushButton, QVBoxLayout, QMessageBox, QSizePolicy, QSlider
-from PIL import Image
-from matplotlib import pyplot as plt
-from skimage.morphology import flood_fill
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPixmap, QImage, QCursor
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QAction, QGridLayout, \
+    QHBoxLayout, QFileDialog, QWidget, QMessageBox
 
-from SegmentationLabeling.src.components.ImageViewer import CustomImageView
-from SegmentationLabeling.src.components.Toolbar import Toolbar
+from SegmentationLabeling.src.components.ImagePreview.ImageViewer import CustomImageView
+from SegmentationLabeling.src.components.Toolbar.Toolbar import Toolbar
 
 
 class Window(QMainWindow):
@@ -28,6 +24,8 @@ class Window(QMainWindow):
         self.indexImage = None
         self.fileList = None
         self.actualQImage = None
+
+        self.temp_mask = None
 
         self.UIComponents()
         self.createActions()
@@ -74,7 +72,6 @@ class Window(QMainWindow):
         def findAverageColorInRoundArea(image, center, radius):
             x, y = center
             square_patch = image[x - radius:x + radius, y - radius: y + radius]
-
             ## TODO: implement round patch
             square_patch = square_patch.reshape((square_patch.shape[0]*square_patch.shape[1], square_patch.shape[2]))
             averageColor = np.mean(square_patch, axis=0).astype(int) if np.any(square_patch) else None
@@ -92,6 +89,7 @@ class Window(QMainWindow):
         scaled_image_np = qimage2ndarray.rgb_view(scaled_image).copy()
         scaled_image_np = np.swapaxes(scaled_image_np, 0, 1)
         x, y = click_pos.x(), click_pos.y()
+        print(scaled_image_np.shape, x, y)
 
 
         '''
@@ -109,12 +107,11 @@ class Window(QMainWindow):
             - 
     
         '''
-        image_masked = self.toolbar.magicWand.createMask(scaled_image_np, (x, y), averageColor, stds_colors ).copy()
-        #image_masked = np.swapaxes(image_masked, 1, 0)
-        
+        image_masked, countours, self.temp_mask = self.toolbar.magicWand.createMask(scaled_image_np, (x, y), averageColor, stds_colors, self.temp_mask )
+        image_masked = np.swapaxes(image_masked, 1, 0)
+        print("oook", image_masked, countours, self.temp_mask)
         q_im = qimage2ndarray.array2qimage(image_masked)
         self.imageOverlay.setPixmap(QPixmap(q_im))
-
 
     def setWandCursor(self):
         # 1. Set the cursor map
@@ -165,7 +162,7 @@ class Window(QMainWindow):
 
         guide = QLabel()
         guide.setFixedHeight(35)
-        guide.setText("KEEP PRESSED 'ALT'/'CTRL' KEY TO REMOVE/ADD AREAS TO THE MASK")
+        guide.setText("KEEP PRESSED 'SHIT'/'CTRL' KEY TO ADD/REMOVE AREAS TO THE MASK")
 
         self.keyPressed = QLabel()
         self.keyPressed.setStyleSheet("color: red; padding: 0px 0px 0px 20px ;")

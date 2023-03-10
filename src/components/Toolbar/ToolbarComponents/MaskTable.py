@@ -1,3 +1,4 @@
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QVBoxLayout, QPushButton, QHBoxLayout, QWidget, QMessageBox
 
 
@@ -34,13 +35,20 @@ class MaskTable(QWidget):
             '''
                 Insert the mask in the list of the masks of the image of the label selected
             '''
+            labelledMask = {
+                'label': selectedLabel,
+                'mask': selectedMask
+            }
+
             if self.actualImageID in self.masks:
-                self.masks[self.actualImageID].append(selectedMask)
+                self.masks[self.actualImageID].append(labelledMask)
             else:
-                self.masks[self.actualImageID] = [selectedMask]
+                self.masks[self.actualImageID] = [labelledMask]
 
             self.table.insertRow(self.table.rowCount())
-            self.table.setItem(self.table.rowCount() - 1, 0, QTableWidgetItem(selectedLabel))
+            item = QTableWidgetItem(selectedLabel)
+            item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(self.table.rowCount() - 1, 0, item)
         else:
             QMessageBox.information(self, "No mask created", "Still no masks have been created.")
 
@@ -82,7 +90,15 @@ class MaskTable(QWidget):
         masktableLayout.addWidget(buttonsW)
 
 
+    def showActualImageMasks(self):
+        labelledMask = self.masks[self.actualImageID]
 
+        for mask in labelledMask:
+            self.table.insertRow(self.table.rowCount())
+            self.table.setItem(self.table.rowCount() - 1, 0, QTableWidgetItem(mask['label']))
+
+    def cleanTable(self):
+        self.table.clearContents()
     '''
         When some rows are clicked the mask selected should be shown
     '''
@@ -91,4 +107,14 @@ class MaskTable(QWidget):
         selectedRows = select.selectedRows()
         print(selectedRows)
         for row in selectedRows:
-            print(row.row())
+            mask = self.masks[self.actualImageID][row.row()]['mask']
+
+
+
+
+    ## TODO: clear table when switching images and report the saved mask when turning back to the image
+    ## TODO: set smoothing factors
+    ## TODO: set labels in GRID Layouts
+    ## TODO: show selected mask when clicked on table
+    ## TODO: set tolerance of the channel in vertical slider
+    ## TODO: implement exportation in COCO

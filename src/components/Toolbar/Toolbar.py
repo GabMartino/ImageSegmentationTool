@@ -1,9 +1,9 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
-from SegmentationLabeling.src.components.LabelsHandler import LabelsHandler
-from SegmentationLabeling.src.components.MaskTable import MaskTable
-from SegmentationLabeling.src.components.imageSelector.ImageSelector import ImageSelector
-from SegmentationLabeling.src.components.magicwandComponents.magicWand import MagicWand
+from SegmentationLabeling.src.components.Toolbar.ToolbarComponents.LabelsHandler import LabelsHandler
+from SegmentationLabeling.src.components.Toolbar.ToolbarComponents.MaskTable import MaskTable
+from SegmentationLabeling.src.components.Toolbar.ToolbarComponents.ImageSelector import ImageSelector
+from SegmentationLabeling.src.components.Toolbar.ToolbarComponents.magicWand import MagicWand
 
 
 class Toolbar(QWidget):
