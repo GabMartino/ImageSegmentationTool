@@ -10,9 +10,11 @@ class MaskTable(QWidget):
 
         self.masks = {}
         self.actualImageID = None
-        self.setup()
+        self.setupUI()
 
-
+    '''
+        Set the ID of the actual image, for saving purpose
+    '''
     def setActualImage(self, actualImageID):
         self.actualImageID = actualImageID
 
@@ -60,7 +62,7 @@ class MaskTable(QWidget):
             self.table.removeRow(row)
         else:
             QMessageBox.information(self, "No row selected to be removed.", "No row selected to be removed.")
-    def setup(self):
+    def setupUI(self):
 
         masktableLayout = QVBoxLayout()
         self.setLayout(masktableLayout)
@@ -90,12 +92,13 @@ class MaskTable(QWidget):
         masktableLayout.addWidget(buttonsW)
 
 
-    def showActualImageMasks(self):
-        labelledMask = self.masks[self.actualImageID]
-
-        for mask in labelledMask:
+    def updateTable(self):
+        for maskDict in self.masks[self.actualImageID]:
+            label = maskDict['label']
             self.table.insertRow(self.table.rowCount())
-            self.table.setItem(self.table.rowCount() - 1, 0, QTableWidgetItem(mask['label']))
+            item = QTableWidgetItem(label)
+            item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(self.table.rowCount() - 1, 0, item)
 
     def cleanTable(self):
         self.table.clearContents()
@@ -114,7 +117,7 @@ class MaskTable(QWidget):
 
     ## TODO: clear table when switching images and report the saved mask when turning back to the image
     ## TODO: set smoothing factors
-    ## TODO: set labels in GRID Layouts
+    ## TODO: fix magic wand outside the overlay
     ## TODO: show selected mask when clicked on table
     ## TODO: set tolerance of the channel in vertical slider
     ## TODO: implement exportation in COCO

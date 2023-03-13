@@ -9,7 +9,7 @@ from PyQt5.QtGui import QPixmap, QImage, QCursor
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QMenuBar, QMenu, QAction, QGridLayout, \
     QHBoxLayout, QFileDialog, QWidget, QMessageBox
 
-from SegmentationLabeling.src.components.ImagePreview.ImageViewer import CustomImageView
+from SegmentationLabeling.src.components.ImagePreview.ImageViewer import CustomImageView, ImageOverlay
 from SegmentationLabeling.src.components.Toolbar.Toolbar import Toolbar
 
 
@@ -40,7 +40,7 @@ class Window(QMainWindow):
         layout = QHBoxLayout()
 
         ## Create Image Viewer and a toolbar
-        self.imageViewer = QWidget()
+        self.imageViewer = ImageOverlay()
         self.toolbar = Toolbar()
 
         layout.addWidget(self.imageViewer, int(self.width()*0.75))
@@ -50,12 +50,17 @@ class Window(QMainWindow):
         self.setCentralWidget(self.mainWidget)
 
 
-        self.setupImageViewer()
+        #self.setupImageViewer()
         self.setupToolbar()
+        self.setupAllEventHandlers()
 
         self.masks = {}
 
+    ###########################################################################à
 
+    #                           SETUP MENU FUNCTIONS
+    #
+    ###########################################################################
 
     def setupMenus(self):
         self.fileMenu = QMenu("&File", self)
@@ -66,6 +71,7 @@ class Window(QMainWindow):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openFile)
 
 
+    ###########################################################################################
     def createMask(self, info):
 
 
@@ -148,98 +154,74 @@ class Window(QMainWindow):
         self.toolbar.magicWand.button.setClickCallback(self.activateWand)
         self.toolbar.magicWand.slider.setValueChangedCallback(self.updateMagicWandSize)
 
-        self.toolbar.imageSelector.nextImageButton.clicked.connect(lambda: self.showImage(increment=True))
-        self.toolbar.imageSelector.previuousImageButton.clicked.connect(lambda: self.showImage(increment=False))
+
+        '''
+            The imageSelector class has 2 buttons that when clicked should update the previews image
+        '''
+
+        #self.toolbar.imageSelector.nextImageButton.clicked.connect(lambda: self.showImage(increment=True))
+        #self.toolbar.imageSelector.previuousImageButton.clicked.connect(lambda: self.showImage(increment=False))
 
 
-    def setupImageViewer(self):
 
-        imageViewerLayout = QGridLayout()
-        self.imageViewer.setLayout(imageViewerLayout)
-
-        self.imageOverlay = CustomImageView()
-        self.imageOverlay.setMouseReleaseFunctionCallback(self.openFile)
-
-        guide = QLabel()
-        guide.setFixedHeight(35)
-        guide.setText("KEEP PRESSED 'SHIT'/'CTRL' KEY TO ADD/REMOVE AREAS TO THE MASK")
-
-        self.keyPressed = QLabel()
-        self.keyPressed.setStyleSheet("color: red; padding: 0px 0px 0px 20px ;")
-        #keyPressed.setText("TEST")
-        guide.setFixedHeight(35)
-
-        imageViewerLayout.addWidget(self.imageOverlay, 0, 0, 1, 2)
-        imageViewerLayout.addWidget(guide, 1, 0)
-        imageViewerLayout.addWidget(self.keyPressed, 1, 1)
-
-        self.toolbar.magicWand.variableHook = self.keyPressed
+    def setupAllEventHandlers(self):
+        '''
+            At the startup of the application the first trigger clicking the interface is to open a folder
+        '''
+        self.imageViewer.setMouseReleaseFunctionCallback(self.openFile)
 
 
-    def _createActions(self):
 
-
-        self.openAction = QAction("&Open...", self) ## Create action for open
-        self.saveAction = QAction("&Save", self) ## Create action for save
-
-    '''
-        In the menuBar we need to open a folder with all the images
-    '''
-    def _createMenuBar(self):
-        menuBar = QMenuBar(self) ## Create a menu bar
-        fileMenu = QMenu("&File", self) ## set the name of menu
-
-        fileMenu.addAction(self.openAction) ## Add the openAction in the filemenu
-        fileMenu.addAction(self.saveAction) ## Add the saveAction in the filemenu
-
-        menuBar.addMenu(fileMenu)  ## Add the menu in the menu bar
-        self.setMenuBar(menuBar)
-
-    def _connectActions(self):
-        # Connect File actions
-        self.openAction.triggered.connect(self.openFile) ## Connect the action to a method
-        self.saveAction.triggered.connect(self.saveFile) ## Connect the action to a method
 
 
     def openFile(self, info):
         # Logic for opening an existing file goes here...
         dialog = QFileDialog()
-        actualDir = "/home/gabriele/Desktop/Barilla/Datasets/wheat-leaf-kaggle/archive/wheat_leaf/" #os.getcwd()
+        actualDir = "/home/gabriele/Desktop/Barilla/Datasets/wheat-leaf-kaggle/archive/wheat_leaf/" #TO BE REMOVED AFTER TESTING PHASE
 
         foo_dir = dialog.getExistingDirectory(self, 'Select Images Directory', directory=actualDir, options=QFileDialog.DontUseNativeDialog)
         if foo_dir:
-            self.actualDirectory = foo_dir
+            self.actualDirectory = foo_dir ## set the actual directory
+
+            '''
+                Get the file list of the folder
+            '''
             self.fileList = os.listdir(self.actualDirectory)
             self.fileList = [filename for filename in self.fileList if pathlib.Path(filename).suffix in [".jpeg", ".jpg", ".png", ".gif", ".JPG", ".JPEG"]]
+
             if len(self.fileList) <= 0:
                 QMessageBox.information(self, "Image Viewer", "The selected directory has no valid images.")
                 return
-            self.indexImage = 0
-            self.showImage(firstCall=True)
 
-            self.imageOverlay.setMouseReleaseFunctionCallback(None)  ## Removed if already called
+            '''
+                Set the first index of the first image
+            '''
+            self.showImage(0)
+            '''
+                IF a folder has been open remove this method on click
+                because the overlay would eventually been clicked by the magic wand
+            '''
+            self.imageViewer.setMouseReleaseFunctionCallback(None)
+            self.toolbar.imageSelector.setSize(len(self.fileList)) ## This will activate the counter
+            self.toolbar.imageSelector.setCallbackForGoNext(self.showImage)
+            self.toolbar.imageSelector.setCallbackForGoPrevious(self.showImage)
         else:
             QMessageBox.information(self, "Image Viewer", "Empty Directory")
 
 
 
-    def showImage(self, increment=True, firstCall=False):
-        if self.fileList:
-            if not firstCall :
-                if increment:
-                    self.indexImage = (self.indexImage + 1) % len(self.fileList)
-                else:
-                    self.indexImage = (self.indexImage - 1) % len(self.fileList)
+    def showImage(self, imageIndex):
 
-            filename = self.actualDirectory + "/" + self.fileList[self.indexImage]
+        if self.fileList: ## if the file list is not empty
+
+            filename = self.actualDirectory + "/" + self.fileList[imageIndex]
             image = QImage(filename)
             if image.isNull():
                 QMessageBox.information(self, "Image Viewer", "Cannot load %s." % filename)
                 return
 
             self.actualQImage = image
-            self.imageOverlay.setPixmap(QPixmap.fromImage(image).scaled(self.imageOverlay.size(), Qt.KeepAspectRatio))
-            self.toolbar.imageSelector.imageCounter.setText(str(self.indexImage + 1) + "/" + str(len(self.fileList)))
+            self.imageViewer.updateImage(image)
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
