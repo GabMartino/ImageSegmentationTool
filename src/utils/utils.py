@@ -35,7 +35,7 @@ def drawMaskOnImage(image, mask):
     """Updates an image in the already drawn window."""
     viz = image.copy()
     contours = find_exterior_contours(mask)  ##find countours of the binary image mask
-    print(contours.shape)
+    
 
     ## Generate random color for the mask
     from random import randrange

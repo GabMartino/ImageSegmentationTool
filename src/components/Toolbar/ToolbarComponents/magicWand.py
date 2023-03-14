@@ -104,7 +104,33 @@ class MagicWandSlider(QWidget):
     def setValueChangedCallback(self, method):
         self.slider.valueChanged.connect(method)
 
+'''
+    We consider the image positioned exactly at the center of the overlay
 
+'''
+def checkIfClickInImage(OverlaySize, ImageSize, ClickPosInOverlay):
+
+    '''
+        We assume that the center of the overlay corresponds to the exact center of the image
+    '''
+    overlay_width, overlay_height = OverlaySize
+    image_width, image_height = ImageSize
+
+    x_overlay_center = int(overlay_width / 2)
+    y_overlay_center = int(overlay_height / 2)
+
+    mid_width_image = int(image_width/2)
+    mid_height_image = int(image_height/2)
+
+    image_origin_x, image_origin_y = (x_overlay_center - mid_width_image), (y_overlay_center - mid_height_image)
+
+    x, y = ClickPosInOverlay
+    x_on_image, y_on_image = x - image_origin_x, y - image_origin_y
+
+    if x_on_image < 0 or x_on_image > image_width or y_on_image < 0 or y_on_image > image_height:
+        return False, None
+
+    return True, (x_on_image, y_on_image)
 
 class MagicWand(QWidget):
 
@@ -118,12 +144,31 @@ class MagicWand(QWidget):
                 self.connectivity | cv.FLOODFILL_FIXED_RANGE | cv.FLOODFILL_MASK_ONLY | 255 << 8
         )
 
-        self.variableHook = None
+        self.active = False
         self.setup()
         self.show()
 
     def updateTolerance(self):
         self.tolerance = self.toleranceSlider.slider.sliderPosition()/10
+
+    def updateWandSize(self):
+        self.magicWandRadius = self.sizeSlider.slider.sliderPosition()
+        self.overlayHook.setWandCursor(self.magicWandRadius) if self.button.isChecked() else None
+
+    def setOverlayCursorHook(self, hook):
+        self.overlayHook = hook
+
+
+    def updateWandState(self):
+        if self.active:
+            if self.button.isChecked():
+                self.overlayHook.setWandCursor(self.magicWandRadius)
+                self.overlayHook.setMouseReleaseFunctionCallback(self.extractMask) ## very complicated binding of functions
+            else:
+                self.overlayHook.resetCursor()
+                self.overlayHook.setMouseReleaseFunctionCallback(None)
+        else:
+            self.button.setChecked(False)
 
     def setup(self):
         mainLayout = QVBoxLayout()
@@ -135,6 +180,7 @@ class MagicWand(QWidget):
         self.wandSet.setLayout(lineLayout)
 
         self.button = MagicWandButton("resources/magic-wand.png")
+        self.button.clicked.connect(self.updateWandState)
         self.colorSelected = ColorPreview()
         self.colorLabel = ColorLabel()
 
@@ -142,14 +188,17 @@ class MagicWand(QWidget):
         lineLayout.addWidget(self.colorSelected)
         lineLayout.addWidget(self.colorLabel)
 
-        self.slider = MagicWandSlider(self.magicWandRadius, "MagicWand Size", 1, 150 )
+        self.sizeSlider = MagicWandSlider(self.magicWandRadius, "MagicWand Size", 1, 150 )
+        self.sizeSlider.setValueChangedCallback(self.updateWandSize)
+
+
         self.toleranceSlider = MagicWandSlider(self.tolerance, "MagicWand Tolerance", 1, 50)
         self.toleranceSlider.setValueChangedCallback(self.updateTolerance)
 
 
 
         mainLayout.addWidget(self.wandSet)
-        mainLayout.addWidget(self.slider)
+        mainLayout.addWidget(self.sizeSlider)
         mainLayout.addWidget(self.toleranceSlider)
 
 
@@ -174,6 +223,54 @@ class MagicWand(QWidget):
         return self.mask
 
 
+    def extractMask(self, args):
+
+        def findAverageColorInRoundArea(image, center, radius):
+            x, y = center
+            l_limit, r_limit = np.clip(x - radius, 0, image.shape[0]), np.clip(x + radius, 0, image.shape[0])
+            u_limit, d_limit = np.clip(y - radius, 0, image.shape[1]), np.clip(y + radius, 0, image.shape[1])
+            patch = image[l_limit:r_limit, u_limit:d_limit]
+            if patch.shape[0] == patch.shape[1]: ##square patch
+                round_patch = []
+                index = 1
+                for idx in range(patch.shape[0]):
+                    row_len = patch[idx, :, :].shape[0]
+                    row_center = int(row_len/2)
+                    row_to_add = patch[idx, row_center - index: row_center + index, :]
+                    round_patch.append(row_to_add)
+                    index = (index + 1 if idx < int(patch.shape[0]/2 - 1) else (index if idx == int(patch.shape[0]/2 -1) else index -1))
+
+                patch = np.vstack(round_patch)
+            else:
+                patch = patch.reshape((patch.shape[0] * patch.shape[1], patch.shape[2]))
+
+            averageColor = np.mean(patch, axis=0).astype(int) if np.any(patch) else None
+            stds_colors = np.std(patch, axis=0).astype(int) if np.any(patch) else None
+            return averageColor, stds_colors
+
+        overlay_size, click_pos, qimage = args
+        real_size_image = qimage.size()
+        x, y = click_pos.x(), click_pos.y()
+
+        InImage, click_pos = checkIfClickInImage((overlay_size.width(), overlay_size.height()),
+                                                 (real_size_image.width(), real_size_image.height()), (x, y))
+        if InImage:
+            (x, y) = click_pos
+            import qimage2ndarray
+            image_np = qimage2ndarray.rgb_view(qimage).copy()
+            image_np = np.swapaxes(image_np, 0, 1)
+            average_color, stds_colors = findAverageColorInRoundArea(image_np, (x, y), self.magicWandRadius)
+            self.setViewedColor(average_color) ## visualize preview of the color
+
+            image_masked, countours, mask = self._searchMask(image_np, (x, y),
+                                                                                        average_color, stds_colors,
+                                                                                        None)
+            image_masked = np.swapaxes(image_masked, 1, 0)
+
+            q_im = qimage2ndarray.array2qimage(image_masked)
+            self.overlayHook.updateImage(q_im)
+
+
     '''
         This method create a mask from a selected point in the 2D space of the image (x,y) and the image itself
         Let's consider a selected point with r, g, b
@@ -191,19 +288,24 @@ class MagicWand(QWidget):
         point out that the axis of the image are inverted (width, height, 3)
         
     '''
-    def createMask(self, img, selected_point, avg_color, std_color, temporary_mask=None):
+    def _searchMask(self, img, selected_point, avg_color, std_color, temporary_mask=None):
         self.img = img.copy()
         x, y = selected_point
-        tolerance = tuple(std_color)#(self.tolerance,) * 3
-        lowerTolerance = (int(np.clip(self.tolerance*tolerance[0], self.tolerance*tolerance[0], avg_color[0])),
-                          int(np.clip(self.tolerance*tolerance[1], self.tolerance*tolerance[0], avg_color[1])),
-                          int(np.clip(self.tolerance*tolerance[2], self.tolerance*tolerance[0], avg_color[2])))
-        upperTolerance = (int(np.clip(self.tolerance*tolerance[0], 0, 255 - avg_color[0])),
-                          int(np.clip(self.tolerance*tolerance[1], 0, 255 - avg_color[1])),
-                          int(np.clip(self.tolerance*tolerance[2], 0, 255 - avg_color[2])))
 
+        def findTolerance(avg_color, std_color):
+
+            tolerance = tuple(std_color)#(self.tolerance,) * 3
+            lowerTolerance = (int(np.clip(self.tolerance*tolerance[0], self.tolerance*tolerance[0], avg_color[0])),
+                              int(np.clip(self.tolerance*tolerance[1], self.tolerance*tolerance[0], avg_color[1])),
+                              int(np.clip(self.tolerance*tolerance[2], self.tolerance*tolerance[0], avg_color[2])))
+            upperTolerance = (int(np.clip(self.tolerance*tolerance[0], 0, 255 - avg_color[0])),
+                              int(np.clip(self.tolerance*tolerance[1], 0, 255 - avg_color[1])),
+                              int(np.clip(self.tolerance*tolerance[2], 0, 255 - avg_color[2])))
+            return tolerance, lowerTolerance, upperTolerance
+
+        tolerance, lowerTolerance, upperTolerance = findTolerance(avg_color, std_color)
         w, h = img.shape[:2]
-        self.mask = np.zeros((w, h), dtype=np.uint8) if temporary_mask is None else temporary_mask ## Create a mask that is the total and final
+        self.mask = np.zeros((w, h), dtype=np.uint8) #if temporary_mask is None else temporary_mask ## Create a mask that is the total and final
         self._flood_mask = np.zeros((w + 2, h + 2), dtype=np.uint8) ## create an empty mask that is the temporary mask
 
 
@@ -228,9 +330,15 @@ class MagicWand(QWidget):
         else:
             self.mask = flood_mask ## otherwise simply overwrite
 
-        return drawMaskOnImage(self.img, self.mask)
+        viz, contours, mask = drawMaskOnImage(self.img, self.mask)
+        return viz, contours, mask
 
 
+    def activateWand(self):
+        self.active = True
+
+    def deactivateWand(self):
+        self.active = False
 
     def keyPressEvent(self, event):
 
@@ -239,10 +347,10 @@ class MagicWand(QWidget):
 
         if event.key() == QtCore.Qt.Key_Shift:
             self.modifier = "SHIFT"
-            self.variableHook.setText("SHIFT PRESSED")
+            self.overlayHook.parent().updateKeyPressedText("SHIFT PRESSED")
         elif event.key() == QtCore.Qt.Key_Control:
             self.modifier = "CTRL"
-            self.variableHook.setText("CTRL PRESSED")
+            self.overlayHook.parent().updateKeyPressedText("CTRL PRESSED")
 
 
         event.accept()
@@ -252,4 +360,4 @@ class MagicWand(QWidget):
        # if event.isAutoRepeat():
         #    return
         self.modifier = None
-        self.variableHook.setText("")
+        self.overlayHook.parent().updateKeyPressedText("")

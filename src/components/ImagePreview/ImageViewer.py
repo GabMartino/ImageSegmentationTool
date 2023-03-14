@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
-from PyQt5.QtCore import Qt, QPointF
-from PyQt5.QtGui import QPalette, QPainter, QPen, QBrush, QPixmap, QImage
+from PyQt5.QtCore import Qt, QPointF, QSize
+from PyQt5.QtGui import QPalette, QPainter, QPen, QBrush, QPixmap, QImage, QCursor
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QWidget, QGridLayout
 from matplotlib import pyplot as plt
 
@@ -24,9 +24,10 @@ class CustomImageView(QLabel):
     # ImageView
     def __init__(self):
         super().__init__()
+
         self.setBackgroundRole(QPalette.Base)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.setScaledContents(True)
+        self.setScaledContents(False)
         self.setAlignment(Qt.AlignCenter)
         self.setText("Open an Image folder to start labeling segments...")
 
@@ -47,6 +48,7 @@ class CustomImageView(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.pressPos = event.pos()
+
     def mouseReleaseEvent(self, event):
         # ensure that the left button was pressed *and* released within the
         # geometry of the widget; if so, emit the signal;
@@ -54,9 +56,12 @@ class CustomImageView(QLabel):
                 event.button() == Qt.LeftButton and
                 event.pos() in self.rect()):
             if self.mousePressCallback is not None:
-                info = (self.rect().size(), event.pos())
+                qimage = self.pixmap().toImage() if self.pixmap() is not None else None
+                info = (self.rect().size(), event.pos(), qimage)
                 self.mousePressCallback(info)
         self.pressPos = None
+
+
 
 
     def drawSegment(self, masks):
@@ -73,6 +78,22 @@ class CustomImageView(QLabel):
     '''
     def updateImage(self, image):
         self.setPixmap(QPixmap.fromImage(image).scaled(self.size(), Qt.KeepAspectRatio))
+
+
+    def setWandCursor(self, size):
+        # 1. Set the cursor map
+        cursor_pix = QPixmap("./resources/circle-icon.png")
+        # 2. Scale textures
+        cursor_scaled_pix = cursor_pix.scaled(QSize(size, size), Qt.KeepAspectRatio)
+
+        # 3. Set cursor style and cursor focus position
+        current_cursor = QCursor(cursor_scaled_pix, -1, -1)
+        self.setCursor(current_cursor)
+
+    def resetCursor(self):
+        self.setCursor(QCursor(Qt.ArrowCursor))
+
+
 
 class ImageOverlay(QWidget):
 
@@ -91,14 +112,13 @@ class ImageOverlay(QWidget):
         guide.setFixedHeight(35)
         guide.setText("KEEP PRESSED 'SHIFT'/'CTRL' KEY TO ADD/REMOVE AREAS TO THE MASK")
 
-        #self.keyPressedLabel = QLabel()
-        #self.keyPressedLabel.setStyleSheet("color: red; padding: 0px 0px 0px 20px ;")
-        # keyPressed.setText("TEST")
+        self.keyPressedLabel = QLabel()
+        self.keyPressedLabel.setStyleSheet("color: red; padding: 0px 0px 0px 20px ;")
         guide.setFixedHeight(35)
 
         layout.addWidget(self.imageOverlay, 0, 0, 1, 2)
         layout.addWidget(guide, 1, 0)
-        #layout.addWidget(self.keyPressedLabel, 1, 1) ## label to
+        layout.addWidget(self.keyPressedLabel, 1, 1) ## label to
 
         #self.toolbar.magicWand.variableHook = self.keyPressedLabel
         self.show()
@@ -108,3 +128,6 @@ class ImageOverlay(QWidget):
 
     def updateImage(self, image):
         self.imageOverlay.updateImage(image)
+
+    def updateKeyPressedText(self, text):
+        self.keyPressedLabel.setText(text)
