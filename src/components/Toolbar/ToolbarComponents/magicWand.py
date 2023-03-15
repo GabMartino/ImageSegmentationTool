@@ -248,27 +248,60 @@ class MagicWand(QWidget):
             stds_colors = np.std(patch, axis=0).astype(int) if np.any(patch) else None
             return averageColor, stds_colors
 
-        overlay_size, click_pos, qimage = args
+        overlay_size, click_pos, qimage, image_overlay_size = args
         real_size_image = qimage.size()
         x, y = click_pos.x(), click_pos.y()
-
-        InImage, click_pos = checkIfClickInImage((overlay_size.width(), overlay_size.height()),
-                                                 (real_size_image.width(), real_size_image.height()), (x, y))
+        '''
+            Check if the click is inside the overlay of the image,
+            
+            convert the click position from the all overlay to the position inside the image overlay
+        '''
+        InImage, click_pos_over_image_overlay = checkIfClickInImage((overlay_size.width(), overlay_size.height()),
+                                                 (image_overlay_size.width(), image_overlay_size.height()), (x, y))
+        #print(overlay_size, real_size_image, InImage)
         if InImage:
-            (x, y) = click_pos
+            (x, y) = click_pos_over_image_overlay
+            '''
+                Cast the Qimage in real size in Numpy Array
+            '''
             import qimage2ndarray
-            image_np = qimage2ndarray.rgb_view(qimage).copy()
-            image_np = np.swapaxes(image_np, 0, 1)
-            average_color, stds_colors = findAverageColorInRoundArea(image_np, (x, y), self.magicWandRadius)
+            real_image_np = qimage2ndarray.rgb_view(qimage).copy()
+            real_image_np = np.swapaxes(real_image_np, 0, 1)
+
+            '''
+                Scale the numpy image in the size of the image overlay to speed up the process using a smaller image
+            '''
+            scaled_image_np = cv.resize(real_image_np, dsize=(image_overlay_size.height(), image_overlay_size.width()), interpolation=cv.INTER_CUBIC)
+            '''
+                Find the average color and the std of the color of the click inside the image area
+            '''
+            average_color, stds_colors = findAverageColorInRoundArea(scaled_image_np, (x, y), self.magicWandRadius)
+            '''
+                Visualize the color 
+            '''
             self.setViewedColor(average_color) ## visualize preview of the color
 
-            image_masked, countours, mask = self._searchMask(image_np, (x, y),
-                                                                                        average_color, stds_colors,
-                                                                                        None)
+            '''
+                Search the mask 
+            '''
+            image_masked, countours, mask = self._searchMask(scaled_image_np, (x, y), average_color, stds_colors, None)
             image_masked = np.swapaxes(image_masked, 1, 0)
-
             q_im = qimage2ndarray.array2qimage(image_masked)
-            self.overlayHook.updateImage(q_im)
+
+            original_size_mask = cv.resize(mask, dsize=(real_size_image.width(), real_size_image.height()), interpolation=cv.INTER_CUBIC)
+            original_size_countours = []
+
+            coef_y = real_size_image.width() / image_overlay_size.width()
+            coef_x = real_size_image.height() /image_overlay_size.height()
+
+            for contour in countours:
+                contour[:, :, 0] = contour[:, :, 0] * coef_x
+                contour[:, :, 1] = contour[:, :, 1] * coef_y
+                original_size_countours.append(contour)
+
+            #self.overlayHook.drawImage(q_im)
+            self.overlayHook.drawImage(q_im)
+            ## TODO: check all size of the mask and countoufrs
 
 
     '''

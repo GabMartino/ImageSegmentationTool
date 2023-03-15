@@ -10,7 +10,7 @@ import cv2 as cv
     '''
 def find_exterior_contours( mask):
     ## lets filter the mask to eliminate some noise
-    # mask = cv.morphologyEx(mask, cv.MORPH_OPEN,cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+    #mask = cv.morphologyEx(mask, cv.MORPH_OPEN,cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
     # print(mask)
     contours = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     contour = None
@@ -35,7 +35,7 @@ def drawMaskOnImage(image, mask):
     """Updates an image in the already drawn window."""
     viz = image.copy()
     contours = find_exterior_contours(mask)  ##find countours of the binary image mask
-    
+
 
     ## Generate random color for the mask
     from random import randrange

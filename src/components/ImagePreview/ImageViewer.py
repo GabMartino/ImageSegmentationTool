@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from PyQt5.QtCore import Qt, QPointF, QSize
+from PyQt5.QtCore import Qt, QPointF, QSize, QPoint
 from PyQt5.QtGui import QPalette, QPainter, QPen, QBrush, QPixmap, QImage, QCursor
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QWidget, QGridLayout
 from matplotlib import pyplot as plt
@@ -24,6 +24,8 @@ class CustomImageView(QLabel):
     # ImageView
     def __init__(self):
         super().__init__()
+
+        self.image = None
 
         self.setBackgroundRole(QPalette.Base)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
@@ -56,27 +58,21 @@ class CustomImageView(QLabel):
                 event.button() == Qt.LeftButton and
                 event.pos() in self.rect()):
             if self.mousePressCallback is not None:
-                qimage = self.pixmap().toImage() if self.pixmap() is not None else None
-                info = (self.rect().size(), event.pos(), qimage)
+                qimage = self.image if self.image is not None else None#self.pixmap().toImage() if self.pixmap() is not None else None
+                imageOverlay = self.pixmap().size() if self.pixmap() is not None else None
+                info = (self.rect().size(), event.pos(), qimage, imageOverlay)
                 self.mousePressCallback(info)
         self.pressPos = None
 
+    def drawImage(self, qimage):
 
-
-
-    def drawSegment(self, masks):
-
-        pixmap = convert_nparray_to_QPixmap(masks)
-        self.setPixmap(pixmap)
-
-        #painter = QPainter(self.pixmap().copy())
-        #painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
-        #painter.drawPixmap()
+        self.setPixmap(QPixmap.fromImage(qimage).scaled(self.size(), Qt.KeepAspectRatio))
 
     '''
         The image should be in QImage type
     '''
     def updateImage(self, image):
+        self.image = image
         self.setPixmap(QPixmap.fromImage(image).scaled(self.size(), Qt.KeepAspectRatio))
 
 
@@ -131,3 +127,6 @@ class ImageOverlay(QWidget):
 
     def updateKeyPressedText(self, text):
         self.keyPressedLabel.setText(text)
+
+
+##TODO COrrect the size of the iamge overlay over the segment extracted
