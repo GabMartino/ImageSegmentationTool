@@ -137,9 +137,6 @@ class MaskTable(QWidget):
         self.overlayHook.drawMultipleMasksOnActualImage(masks)
 
 
-    ## TODO: clear table when switching images and report the saved mask when turning back to the image
     ## TODO: set smoothing factors
-    ## TODO: fix magic wand outside the overlay
-    ## TODO: show selected mask when clicked on table
     ## TODO: set tolerance of the channel in vertical slider
     ## TODO: implement exportation in COCO

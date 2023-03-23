@@ -40,7 +40,22 @@ class CustomImageView(QLabel):
         self.setUpdatesEnabled(True)
 
 
+    def wheelEvent(self, event) -> None:
+        ##TODO: implement scrool zooming
+        '''
+            setTransformationAnchor(AnchorUnderMouse);
+            setDragMode(ScrollHandDrag);
 
+            double scaleFactor = 1.2;
+            if (_wheelEvent->delta()>0){
+                scale(scaleFactor,scaleFactor);
+            }
+            else
+            {
+                scale(1/scaleFactor,1/scaleFactor);
+            }
+
+        '''
     '''
         
             When clicked on the image overlay 
