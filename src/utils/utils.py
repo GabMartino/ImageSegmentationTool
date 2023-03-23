@@ -1,5 +1,7 @@
 
 import cv2 as cv
+import numpy as np
+
 '''
         This method find the countour of the mask (that is a binary image)
 
@@ -51,3 +53,19 @@ def drawMaskOnImage(image, mask):
     return viz, contours, mask
 
 
+def fromQimageToNumpy(qimage):
+    import qimage2ndarray
+    np_image = qimage2ndarray.rgb_view(qimage).copy()
+    np_image = np.swapaxes(np_image, 0, 1)
+    return np_image
+
+
+def fromNumpyToQImage(np_image):
+    import qimage2ndarray
+    image_masked = np.swapaxes(np_image, 1, 0)
+    q_im = qimage2ndarray.array2qimage(image_masked)
+    return q_im
+
+
+def scaleNumpyImage(np_image, new_height, new_width):
+    return cv.resize(np_image, dsize=(new_height, new_width), interpolation=cv.INTER_CUBIC)

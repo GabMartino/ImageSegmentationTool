@@ -1,6 +1,8 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QVBoxLayout, QPushButton, QHBoxLayout, QWidget, QMessageBox
 
+from SegmentationLabeling.src.utils.utils import drawMaskOnImage
+
 
 class MaskTable(QWidget):
 
@@ -11,15 +13,23 @@ class MaskTable(QWidget):
         self.masks = {}
         self.actualImageID = None
         self.setupUI()
+        self.overlayHook = None
 
     '''
         Set the ID of the actual image, for saving purpose
     '''
     def setActualImage(self, actualImageID):
         self.actualImageID = actualImageID
+        self.cleanTable()
+        self.updateTable() if self.actualImageID is not None else None
 
+    def setOverlayCursorHook(self, hook):
+        self.overlayHook = hook
 
     def insertMask(self):
+        if self.actualImageID is None:
+            QMessageBox.information(self, "Images folder not selected", "Select an image folder before adding a mask")
+            return
         '''
             Get label checked
         '''
@@ -32,7 +42,7 @@ class MaskTable(QWidget):
             Get mask from magic wand
         '''
         selectedMask = self.parent().magicWand.getMask()
-        print(selectedMask)
+        print("print selected mask", selectedMask)
         if selectedMask is not None:
             '''
                 Insert the mask in the list of the masks of the image of the label selected
@@ -60,6 +70,7 @@ class MaskTable(QWidget):
         if len(selectedRows) > 0:
             row = selectedRows[0].row()
             self.table.removeRow(row)
+            del self.masks[self.actualImageID][row]
         else:
             QMessageBox.information(self, "No row selected to be removed.", "No row selected to be removed.")
     def setupUI(self):
@@ -93,15 +104,19 @@ class MaskTable(QWidget):
 
 
     def updateTable(self):
-        for maskDict in self.masks[self.actualImageID]:
-            label = maskDict['label']
-            self.table.insertRow(self.table.rowCount())
-            item = QTableWidgetItem(label)
-            item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(self.table.rowCount() - 1, 0, item)
+        if self.actualImageID in self.masks:
+            for maskDict in self.masks[self.actualImageID]:
+                label = maskDict['label']
+                self.table.insertRow(self.table.rowCount())
+                item = QTableWidgetItem(label)
+                item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(self.table.rowCount() - 1, 0, item)
 
     def cleanTable(self):
         self.table.clearContents()
+        self.table.clear()
+        for row in range(self.table.rowCount()):
+            self.table.removeRow(row)
     '''
         When some rows are clicked the mask selected should be shown
     '''
@@ -109,10 +124,17 @@ class MaskTable(QWidget):
         select = self.table.selectionModel()
         selectedRows = select.selectedRows()
         print(selectedRows)
+        masks = []
         for row in selectedRows:
-            mask = self.masks[self.actualImageID][row.row()]['mask']
+            masks.append(self.masks[self.actualImageID][row.row()]['mask'])
 
 
+        '''
+        print(masks)
+        for mask in masks:
+            img, _, _ = drawMaskOnImage(img, mask)
+        '''
+        self.overlayHook.drawMultipleMasksOnActualImage(masks)
 
 
     ## TODO: clear table when switching images and report the saved mask when turning back to the image

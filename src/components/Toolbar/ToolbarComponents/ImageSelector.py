@@ -12,6 +12,10 @@ class ImageSelector(QWidget):
 
         self.indexImage = 0
         self.size = None
+        self.maskTableHook = None
+
+    def setMaskTableHook(self, hook):
+        self.maskTableHook = hook
 
     def setup(self):
 
@@ -59,6 +63,7 @@ class ImageSelector(QWidget):
             self.indexImage = (self.indexImage + 1) % self.size
             self.imageCounter.setText(str(self.indexImage + 1) + "/" + str(self.size))
             self.goNextCallback(self.indexImage)
+            self.maskTableHook.setActualImage(self.indexImage)
 
     def goPrevious(self):
         if self.size:
@@ -66,3 +71,4 @@ class ImageSelector(QWidget):
 
             self.imageCounter.setText(str(self.indexImage + 1) + "/" + str(self.size))
             self.goPreviousCallback(self.indexImage)
+            self.maskTableHook.setActualImage(self.indexImage)

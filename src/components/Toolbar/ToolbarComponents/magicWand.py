@@ -6,9 +6,9 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QPalette, QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSlider
-from scipy.interpolate import splprep, splev
+#from scipy.interpolate import splprep, splev
 
-from SegmentationLabeling.src.utils.utils import drawMaskOnImage
+from SegmentationLabeling.src.utils.utils import drawMaskOnImage, fromQimageToNumpy, scaleNumpyImage, fromNumpyToQImage
 
 
 class MagicWandButton(QPushButton):
@@ -140,6 +140,7 @@ class MagicWand(QWidget):
         self.connectivity = 4
         self.tolerance = 1
         self.modifier = None
+        self.mask = None
         self._flood_fill_flags = (
                 self.connectivity | cv.FLOODFILL_FIXED_RANGE | cv.FLOODFILL_MASK_ONLY | 255 << 8
         )
@@ -157,7 +158,6 @@ class MagicWand(QWidget):
 
     def setOverlayCursorHook(self, hook):
         self.overlayHook = hook
-
 
     def updateWandState(self):
         if self.active:
@@ -223,6 +223,10 @@ class MagicWand(QWidget):
         return self.mask
 
 
+    '''
+        This method is called whenever the user click on the overlay of the image
+    '''
+
     def extractMask(self, args):
 
         def findAverageColorInRoundArea(image, center, radius):
@@ -248,6 +252,9 @@ class MagicWand(QWidget):
             stds_colors = np.std(patch, axis=0).astype(int) if np.any(patch) else None
             return averageColor, stds_colors
 
+        '''
+            This click return the size of the overlay, the click position in the overlay, the image, the relative size of the image inside the overlay
+        '''
         overlay_size, click_pos, qimage, image_overlay_size = args
         real_size_image = qimage.size()
         x, y = click_pos.x(), click_pos.y()
@@ -260,48 +267,44 @@ class MagicWand(QWidget):
                                                  (image_overlay_size.width(), image_overlay_size.height()), (x, y))
         #print(overlay_size, real_size_image, InImage)
         if InImage:
+            '''
+                The click now corresponds to the actual point on the image, now scaled ( not on real resolution)
+            '''
             (x, y) = click_pos_over_image_overlay
+            realsize_image_np = fromQimageToNumpy(qimage)
+            scaled_image_np = scaleNumpyImage(realsize_image_np, image_overlay_size.height(), image_overlay_size.width())
             '''
-                Cast the Qimage in real size in Numpy Array
-            '''
-            import qimage2ndarray
-            real_image_np = qimage2ndarray.rgb_view(qimage).copy()
-            real_image_np = np.swapaxes(real_image_np, 0, 1)
-
-            '''
-                Scale the numpy image in the size of the image overlay to speed up the process using a smaller image
-            '''
-            scaled_image_np = cv.resize(real_image_np, dsize=(image_overlay_size.height(), image_overlay_size.width()), interpolation=cv.INTER_CUBIC)
-            '''
-                Find the average color and the std of the color of the click inside the image area
+                Just to visulize what clicked on...
             '''
             average_color, stds_colors = findAverageColorInRoundArea(scaled_image_np, (x, y), self.magicWandRadius)
-            '''
-                Visualize the color 
-            '''
             self.setViewedColor(average_color) ## visualize preview of the color
 
             '''
-                Search the mask 
+                Search the mask on the scaled version of the image to speed up the process
             '''
             image_masked, countours, mask = self._searchMask(scaled_image_np, (x, y), average_color, stds_colors, None)
-            image_masked = np.swapaxes(image_masked, 1, 0)
-            q_im = qimage2ndarray.array2qimage(image_masked)
 
-            original_size_mask = cv.resize(mask, dsize=(real_size_image.width(), real_size_image.height()), interpolation=cv.INTER_CUBIC)
+
+            q_im = fromNumpyToQImage(image_masked)
+
+            original_size_mask = scaleNumpyImage(mask, real_size_image.height(), real_size_image.width()) #cv.resize(mask, dsize=(real_size_image.width(), real_size_image.height()), interpolation=cv.INTER_CUBIC)
+
+            '''
+            
+            
             original_size_countours = []
 
             coef_y = real_size_image.width() / image_overlay_size.width()
             coef_x = real_size_image.height() /image_overlay_size.height()
 
             for contour in countours:
-                contour[:, :, 0] = contour[:, :, 0] * coef_x
-                contour[:, :, 1] = contour[:, :, 1] * coef_y
+                contour[:, 0] = contour[:, 0] * coef_x
+                contour[:, 1] = contour[:, 1] * coef_y
                 original_size_countours.append(contour)
 
-            #self.overlayHook.drawImage(q_im)
+            '''
             self.overlayHook.drawImage(q_im)
-            ## TODO: check all size of the mask and countoufrs
+            self.mask = original_size_mask
 
 
     '''

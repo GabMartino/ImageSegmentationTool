@@ -122,7 +122,8 @@ class Window(QMainWindow):
         '''
         self.imageViewer.setMouseReleaseFunctionCallback(self.openImageFolder)
         self.toolbar.magicWand.setOverlayCursorHook(self.imageViewer.imageOverlay) ##set which overlay should affect the changing of the cursor of the magic wand
-
+        self.toolbar.masktable.setOverlayCursorHook(self.imageViewer.imageOverlay)
+        self.toolbar.imageSelector.setMaskTableHook(self.toolbar.masktable)
     #######################################################################################
     ##
     ##                 SCROLLER AND VISUALIZERS METHODS
@@ -158,6 +159,7 @@ class Window(QMainWindow):
                 Set the first index of the first image
             '''
             self.showImage(0)
+            self.toolbar.masktable.setActualImage(0)
             '''
                 IF a folder has been open remove this method on click
                 because the overlay would eventually been clicked by the magic wand

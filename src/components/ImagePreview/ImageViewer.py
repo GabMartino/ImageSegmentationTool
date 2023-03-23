@@ -5,6 +5,9 @@ from PyQt5.QtGui import QPalette, QPainter, QPen, QBrush, QPixmap, QImage, QCurs
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QWidget, QGridLayout
 from matplotlib import pyplot as plt
 
+from SegmentationLabeling.src.utils.utils import drawMaskOnImage, fromNumpyToQImage, fromQimageToNumpy
+
+
 def convert_nparray_to_QPixmap(img):
     w,h,ch = img.shape
     # Convert resulting image to pixmap
@@ -75,6 +78,19 @@ class CustomImageView(QLabel):
         self.image = image
         self.setPixmap(QPixmap.fromImage(image).scaled(self.size(), Qt.KeepAspectRatio))
 
+    def drawMaskOnActualImage(self, mask):
+
+        np_image = fromQimageToNumpy(self.image.copy())
+        viz, contours, mask = drawMaskOnImage(np_image, mask)
+        qimg = fromNumpyToQImage(viz)
+        self.drawImage(qimg)
+
+    def drawMultipleMasksOnActualImage(self, masks):
+        np_image = fromQimageToNumpy(self.image.copy())
+        for mask in masks:
+            np_image, contours, mask = drawMaskOnImage(np_image, mask)
+        qimg = fromNumpyToQImage(np_image)
+        self.drawImage(qimg)
 
     def setWandCursor(self, size):
         # 1. Set the cursor map
