@@ -49,7 +49,7 @@ class MaskTable(QWidget):
             '''
             labelledMask = {
                 'label': selectedLabel,
-                'mask': selectedMask
+                'mask': selectedMask.tolist()
             }
 
             if self.actualImageID in self.masks:
@@ -123,7 +123,6 @@ class MaskTable(QWidget):
     def handleMasksClicking(self):
         select = self.table.selectionModel()
         selectedRows = select.selectedRows()
-        print(selectedRows)
         masks = []
         for row in selectedRows:
             masks.append(self.masks[self.actualImageID][row.row()]['mask'])

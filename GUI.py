@@ -65,56 +65,15 @@ class Window(QMainWindow):
     def setupMenus(self):
         self.fileMenu = QMenu("&File", self)
         self.fileMenu.addAction(self.openAct)
+        self.fileMenu.addAction(self.exportAct)
+        self.fileMenu.addAction(self.importAct)
         self.menuBar().addMenu(self.fileMenu)
 
     def createActions(self):
         self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.openImageFolder)
-
+        self.exportAct = QAction("&Export", self, shortcut="Ctrl+S", triggered=self.exportAnnotations)
+        self.importAct = QAction("&Import", self, shortcut="Ctrl+I", triggered=self.importAnnotations)
     ###########################################################################################
-    '''
-    
-    def createMask(self, info):
-
-        def findAverageColorInRoundArea(image, center, radius):
-            x, y = center
-            square_patch = image[x - radius:x + radius, y - radius: y + radius]
-            ## TODO: implement round patch
-            square_patch = square_patch.reshape((square_patch.shape[0] * square_patch.shape[1], square_patch.shape[2]))
-            averageColor = np.mean(square_patch, axis=0).astype(int) if np.any(square_patch) else None
-            stds_colors = np.std(square_patch, axis=0).astype(int) if np.any(square_patch) else None
-            return averageColor, stds_colors
-
-        image = self.actualQImage  ## RealImage with actual size
-        overlay_size, click_pos = info  ## Overlay size and click position on the overlay
-        realSize_image = image.size()  ## Real image size
-
-        scaled_image = image.scaled(overlay_size)  ## image scaled in the size of the overlay to work easily
-        import qimage2ndarray
-        scaled_image_np = qimage2ndarray.rgb_view(scaled_image).copy()
-        scaled_image_np = np.swapaxes(scaled_image_np, 0, 1)
-        x, y = click_pos.x(), click_pos.y()
-        print(scaled_image_np.shape, x, y)
-
-        radius = self.toolbar.magicWand.magicWandRadius
-        averageColor, stds_colors = findAverageColorInRoundArea(scaled_image_np, (x, y), radius)
-        self.toolbar.magicWand.setViewedColor(averageColor)
-        
-            Create the mask from the pixel clicked.
-            Parameters:
-            - Scaled image: to speed up the mask finding
-            - (x,y) coordinates of the click point on the scaled image
-            - 
-    
-        image_masked, countours, self.temp_mask = self.toolbar.magicWand.createMask(scaled_image_np, (x, y),
-                                                                                    averageColor, stds_colors,
-                                                                                    self.temp_mask)
-        image_masked = np.swapaxes(image_masked, 1, 0)
-        print("oook", image_masked, countours, self.temp_mask)
-        q_im = qimage2ndarray.array2qimage(image_masked)
-        self.imageOverlay.setPixmap(QPixmap(q_im))
-        
-    
-    '''
 
     def setupAllEventHandlers(self):
         '''
@@ -190,7 +149,15 @@ class Window(QMainWindow):
 
             self.actualQImage = image
             self.imageViewer.updateImage(image)
+    def exportAnnotations(self):
 
+        '''
+            from the mask images to the coco class
+        :return:
+        '''
+
+    def importAnnotations(self):
+        pass
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):

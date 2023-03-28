@@ -280,31 +280,20 @@ class MagicWand(QWidget):
             self.setViewedColor(average_color) ## visualize preview of the color
 
             '''
-                Search the mask on the scaled version of the image to speed up the process
+                Search the mask on the scaled (small) version of the image to speed up the process
             '''
-            image_masked, countours, mask = self._searchMask(scaled_image_np, (x, y), average_color, stds_colors, None)
-
+            image_masked, countours, self.mask = self._searchMask(scaled_image_np, (x, y), average_color, stds_colors, self.mask)
 
             q_im = fromNumpyToQImage(image_masked)
 
-            original_size_mask = scaleNumpyImage(mask, real_size_image.height(), real_size_image.width()) #cv.resize(mask, dsize=(real_size_image.width(), real_size_image.height()), interpolation=cv.INTER_CUBIC)
+            original_size_mask = scaleNumpyImage(self.mask, real_size_image.height(), real_size_image.width()) #cv.resize(mask, dsize=(real_size_image.width(), real_size_image.height()), interpolation=cv.INTER_CUBIC)
 
-            '''
-            
-            
-            original_size_countours = []
+           # self.overlayHook.drawMaskOnActualImage({'original_size_mask':original_size_mask,
+            #                                                 'small_mask':mask})
 
-            coef_y = real_size_image.width() / image_overlay_size.width()
-            coef_x = real_size_image.height() /image_overlay_size.height()
-
-            for contour in countours:
-                contour[:, 0] = contour[:, 0] * coef_x
-                contour[:, 1] = contour[:, 1] * coef_y
-                original_size_countours.append(contour)
-
-            '''
             self.overlayHook.drawImage(q_im)
-            self.mask = original_size_mask
+            #self.overlayHook.setMasks(original_size_mask)
+            #self.mask = original_size_mask
 
 
     '''
@@ -341,7 +330,7 @@ class MagicWand(QWidget):
 
         tolerance, lowerTolerance, upperTolerance = findTolerance(avg_color, std_color)
         w, h = img.shape[:2]
-        self.mask = np.zeros((w, h), dtype=np.uint8) #if temporary_mask is None else temporary_mask ## Create a mask that is the total and final
+        self.mask = np.zeros((w, h), dtype=np.uint8) if temporary_mask is None else temporary_mask ## Create a mask that is the total and final
         self._flood_mask = np.zeros((w + 2, h + 2), dtype=np.uint8) ## create an empty mask that is the temporary mask
 
 

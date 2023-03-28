@@ -1,3 +1,5 @@
+from typing import List
+
 import cv2
 import numpy as np
 from PyQt5.QtCore import Qt, QPointF, QSize, QPoint
@@ -29,7 +31,8 @@ class CustomImageView(QLabel):
         super().__init__()
 
         self.image = None
-
+        self.scrollingScaleFactor = 1.0
+        self.actualDrawnMasks = []
         self.setBackgroundRole(QPalette.Base)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.setScaledContents(False)
@@ -40,22 +43,15 @@ class CustomImageView(QLabel):
         self.setUpdatesEnabled(True)
 
 
-    def wheelEvent(self, event) -> None:
-        ##TODO: implement scrool zooming
-        '''
-            setTransformationAnchor(AnchorUnderMouse);
-            setDragMode(ScrollHandDrag);
+    def wheelEvent(self, event):
+        if self.pixmap():
+            if event.pixelDelta().y() > 0:
+                self.scrollingScaleFactor += 0.2
+            else:
+                self.scrollingScaleFactor -= 0.2
+            self.drawMultipleMasksOnActualImage(self.actualDrawnMasks)
+            #self.setPixmap(QPixmap.fromImage(self.image).scaled(self.size()*self.scrollingScaleFactor, Qt.KeepAspectRatio))
 
-            double scaleFactor = 1.2;
-            if (_wheelEvent->delta()>0){
-                scale(scaleFactor,scaleFactor);
-            }
-            else
-            {
-                scale(1/scaleFactor,1/scaleFactor);
-            }
-
-        '''
     '''
         
             When clicked on the image overlay 
@@ -83,27 +79,35 @@ class CustomImageView(QLabel):
         self.pressPos = None
 
     def drawImage(self, qimage):
-
-        self.setPixmap(QPixmap.fromImage(qimage).scaled(self.size(), Qt.KeepAspectRatio))
+        self.setPixmap(QPixmap.fromImage(qimage).scaled(self.size()*self.scrollingScaleFactor, Qt.KeepAspectRatio))
 
     '''
         The image should be in QImage type
     '''
     def updateImage(self, image):
         self.image = image
-        self.setPixmap(QPixmap.fromImage(image).scaled(self.size(), Qt.KeepAspectRatio))
+        self.scrollingScaleFactor = 1.0
+        self.actualDrawnMasks = []
+        self.setPixmap(QPixmap.fromImage(image).scaled(self.size()*self.scrollingScaleFactor, Qt.KeepAspectRatio))
 
     def drawMaskOnActualImage(self, mask):
-
+        self.actualDrawnMasks = [mask]
         np_image = fromQimageToNumpy(self.image.copy())
         viz, contours, mask = drawMaskOnImage(np_image, mask)
         qimg = fromNumpyToQImage(viz)
         self.drawImage(qimg)
 
+    def setMasks(self, masks):
+        if type(masks) == List:
+            self.actualDrawnMasks = masks
+        else:
+            self.actualDrawnMasks = [masks]
     def drawMultipleMasksOnActualImage(self, masks):
+        self.actualDrawnMasks = masks
         np_image = fromQimageToNumpy(self.image.copy())
         for mask in masks:
             np_image, contours, mask = drawMaskOnImage(np_image, mask)
+
         qimg = fromNumpyToQImage(np_image)
         self.drawImage(qimg)
 
