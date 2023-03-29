@@ -150,11 +150,27 @@ class Window(QMainWindow):
             self.actualQImage = image
             self.imageViewer.updateImage(image)
     def exportAnnotations(self):
+        if self.fileList:
 
-        '''
-            from the mask images to the coco class
-        :return:
-        '''
+            dialog = QFileDialog()
+            actualDir = "/home/gabriele/Desktop/"  # TO BE REMOVED AFTER TESTING PHASE
+
+            filename, extension = dialog.getSaveFileName(self, "Save Annotations", actualDir, ".json", options=QFileDialog.DontUseNativeDialog)
+
+            import json
+            masks = self.toolbar.masktable.masks
+
+            annotations = []
+            for imageID in masks:
+                annotations.append({'id': imageID,
+                                    'filename': self.fileList[imageID],
+                                    'annotation': masks[imageID]})
+
+
+            with open(filename + extension, "w") as outfile:
+                json.dump(annotations, outfile)
+        else:
+            QMessageBox.information(self, "No Image folder selected", "No annotation has been found.")
 
     def importAnnotations(self):
         pass

@@ -1,0 +1,40 @@
+
+
+
+info:
+  description:
+  url:
+  version:
+  year:
+  contributor:
+  date_created:
+
+licences:
+  url:
+  id:
+  name:
+
+#images:
+#  - id:
+#    license:
+#    coco_url:
+#    flickr_url:
+#    width:
+#    height:
+#    file_name:
+ #   date_captured:
+
+#annotations:
+#  - id:
+#    category_id:
+#    iscrowd: 0
+#    segmentation: [[]]
+#    image_id: is the if the image
+#    area: number of pixels
+#    bbox:
+# - id: and so on
+
+#categories:
+#  - supercategory:
+#    id:
+#    name:

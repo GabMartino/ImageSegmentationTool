@@ -4,3 +4,5 @@
 window:
   width: 1280
   height: 720
+
+coco_config_path: ./config/coco_annotation_config.yaml
